@@ -1,0 +1,20 @@
+{% extends 'base.html' %}{% block content %}<div class="hero"><div><span class="eyebrow">OPERACIÓN EN TIEMPO REAL</span><h1>Material en proceso</h1><p>Administra programas, inventario y producción desde un solo lugar.</p></div><div class="hero-date">{% now 'd/m/Y' %}<small>{% now 'H:i' %}</small></div></div>
+<section class="module-grid">
+{% if module_access.program_loading %}
+<a class="module-card blue" href="{% url 'load-program' %}"><span class="module-icon">▤</span><span><b>Cargar programa</b><small>Carga individual o masiva desde Excel</small></span><i>→</i></a>
+{% endif %}{% if module_access.heliang %}
+<a class="module-card teal priority-card" href="{% url 'heliang' %}"><span class="module-icon">⚙</span><span><b>Heliang · Máquinas automáticas</b><small>Asigna órdenes, monitorea máquinas y registra cierres</small></span><i>→</i></a>
+{% endif %}{% if module_access.surplus %}
+<a class="module-card amber" href="{% url 'surplus' %}"><span class="module-icon">↺</span><span><b>Material sobrante</b><small>Recibe o carga sobrante a un programa</small></span><i>→</i></a>
+{% endif %}{% if module_access.reports %}
+<a class="module-card violet" href="{% url 'report' %}"><span class="module-icon">▥</span><span><b>Reportes</b><small>Consulta cierres y exporta resultados</small></span><i>→</i></a>
+{% endif %}{% if module_access.process_material %}
+<a class="module-card blue" href="{% url 'process-material' %}"><span class="module-icon">⇄</span><span><b>Material en proceso</b><small>Transfiere piezas entre etapas de producción</small></span><i>→</i></a>
+<a class="module-card teal" href="{% url 'process-list' %}"><span class="module-icon">▦</span><span><b>Procesos y máquinas</b><small>Consulta el catálogo operativo de planta</small></span><i>→</i></a>
+{% endif %}{% if module_access.line_dashboard %}<a class="module-card line-screen" href="{% url 'line-dashboard' %}"><span class="module-icon">◫</span><span><b>Tablero visual de línea</b><small>Vista en tiempo real para pantallas de producción</small></span><i>→</i></a>{% endif %}{% if not module_access.program_loading and not module_access.heliang and not module_access.inventory and not module_access.surplus and not module_access.process_material and not module_access.reports and not module_access.line_dashboard %}<div class="empty-access"><b>Sin módulos asignados</b><p>Solicita al administrador que habilite los apartados necesarios para tu operación.</p></div>{% endif %}
+</section>
+<div class="section-heading"><div><h2>Resumen de operación</h2><p>Estado actual de la planta</p></div>{% if module_access.process_material %}<a href="{% url 'process-list' %}">Ver procesos y máquinas →</a>{% endif %}</div>
+<section class="cards"><article><strong>{{ open_orders }}</strong><span>Órdenes abiertas</span></article><article><strong>{{ active_work }}</strong><span>En proceso</span></article>
+<article><strong>{{ closed_count }}</strong><span>Cierres históricos</span></article><article><strong>{{ part_count }}</strong><span>Partes en inventario</span></article></section>
+<section class="panel"><h2>Cierres recientes</h2><div class="table-wrap"><table><thead><tr><th>Folio</th><th>Programa</th><th>Parte</th><th>Máquina</th><th>Cantidad</th><th>Kg</th></tr></thead><tbody>
+{% for row in recent_closes %}<tr><td>{{ row.folio }}</td><td>{{ row.work_item.order.program }}</td><td>{{ row.work_item.order.part.number }}</td><td>{{ row.work_item.machine.code }}</td><td>{{ row.quantity }}</td><td>{{ row.weight_kg }}</td></tr>{% empty %}<tr><td colspan="6">Sin cierres registrados.</td></tr>{% endfor %}</tbody></table></div></section>{% endblock %}

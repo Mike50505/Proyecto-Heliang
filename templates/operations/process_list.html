@@ -1,0 +1,3 @@
+{% extends 'base.html' %}{% block title %}Procesos · MESA{% endblock %}{% block content %}
+<div class="title-row"><div><span class="eyebrow">PLANTA</span><h1>Procesos y máquinas</h1><p>Catálogo operativo de las líneas de producción.</p></div><a class="button" href="{% url 'start-work' %}">Enviar a producción</a></div>
+<section class="process-grid">{% for process in processes %}<article><span>{{ forloop.counter|stringformat:'02d' }}</span><h2>{{ process.name }}</h2><div>{% for machine in process.machine_set.all %}<small>{{ machine.code }}</small>{% empty %}<small>Sin máquinas asignadas</small>{% endfor %}</div></article>{% empty %}<p>No hay procesos configurados.</p>{% endfor %}</section>{% endblock %}
