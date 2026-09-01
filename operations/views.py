@@ -1,16 +1,20 @@
 import csv
+from io import BytesIO
 from zipfile import BadZipFile
-from datetime import date, datetime
+from datetime import date, datetime, time
 from decimal import Decimal, InvalidOperation
 from django.contrib import messages
 from django.contrib.auth.decorators import login_required
 from django.core.exceptions import ValidationError
 from django.db import transaction
-from django.db.models import Count, Sum
+from django.db.models import Count, Max, Q, Sum
 from django.http import HttpResponse
 from django.shortcuts import redirect, render
 from django.utils import timezone
-from openpyxl import load_workbook
+from openpyxl import Workbook, load_workbook
+from openpyxl.styles import Alignment, Font, PatternFill
+from openpyxl.utils.datetime import to_excel
+from openpyxl.worksheet.datavalidation import DataValidation
 from openpyxl.utils.exceptions import InvalidFileException
 from .access import module_required
 from .forms import (BulkProgramForm, CloseProductionForm, ProcessMovementForm,
@@ -18,7 +22,7 @@ from .forms import (BulkProgramForm, CloseProductionForm, ProcessMovementForm,
 from .models import (Employee, Inventory, InventoryBucket, Machine, Movement, Process, ProductionClose,
                      ProductionOrder, WorkInProcess)
 from .services import (close_production, create_program_order, move_process_material,
-                       move_surplus, start_production)
+                       move_surplus, resolve_program_client, start_production)
 
 
 @login_required
@@ -36,7 +40,7 @@ def dashboard(request):
 @login_required
 @module_required("program_loading")
 def order_list(request):
-    orders = ProductionOrder.objects.select_related("part").order_by("-created_at")[:500]
+    orders = ProductionOrder.objects.select_related("part", "part__client").order_by("-created_at")[:500]
     return render(request, "operations/order_list.html", {"orders": orders})
 
 
@@ -64,6 +68,142 @@ def _cell_text(value):
     return str(value).strip()
 
 
+def _cell_quantity(value):
+    # El archivo original tiene cantidades numéricas con formato de fecha.
+    # openpyxl las convierte a datetime; el serial recupera el número capturado.
+    if isinstance(value, (datetime, date, time)):
+        return Decimal(str(to_excel(value)))
+    return Decimal(str(value).replace(",", ""))
+
+
+@login_required
+@module_required("program_loading")
+def download_program_template(request):
+    workbook = Workbook()
+    sheet = workbook.active
+    sheet.title = "Sheet1"
+    headers = ["ID Cliente", "Orden de Produccion", "Linea Prod Clte",
+               "Fecha de Entrega", "Num. Parte", "Cantidad", "Linea"]
+    sheet.append(headers)
+
+    header_fill = PatternFill("solid", fgColor="0875BD")
+    for cell in sheet[1]:
+        cell.fill = header_fill
+        cell.font = Font(color="FFFFFF", bold=True)
+        cell.alignment = Alignment(horizontal="center")
+
+    sheet.freeze_panes = "A2"
+    sheet.auto_filter.ref = "A1:G1000"
+    widths = {"A": 18, "B": 25, "C": 22, "D": 20, "E": 22, "F": 15, "G": 18}
+    for column, width in widths.items():
+        sheet.column_dimensions[column].width = width
+    for row in range(2, 1001):
+        sheet.cell(row, 4).number_format = "dd/mm/yyyy"
+        sheet.cell(row, 6).number_format = "0.###"
+
+    positive_quantity = DataValidation(
+        type="decimal", operator="greaterThan", formula1="0", allow_blank=True)
+    positive_quantity.error = "La cantidad debe ser un número mayor que cero."
+    positive_quantity.errorTitle = "Cantidad inválida"
+    positive_quantity.prompt = "Captura una cantidad mayor que cero."
+    positive_quantity.promptTitle = "Cantidad"
+    positive_quantity.showErrorMessage = True
+    positive_quantity.showInputMessage = True
+    sheet.add_data_validation(positive_quantity)
+    positive_quantity.add("F2:F1000")
+
+    instructions = workbook.create_sheet("Instrucciones")
+    instructions.column_dimensions["A"].width = 28
+    instructions.column_dimensions["B"].width = 85
+    instructions.append(["Campo", "Descripción"])
+    descriptions = [
+        ("ID Cliente", "Identificador o nombre del cliente. Obligatorio."),
+        ("Orden de Produccion", "Número del programa u orden del cliente. Obligatorio."),
+        ("Linea Prod Clte", "Línea de producción del cliente. Opcional."),
+        ("Fecha de Entrega", "Fecha en formato dd/mm/aaaa. Opcional."),
+        ("Num. Parte", "Número de parte. Obligatorio."),
+        ("Cantidad", "Cantidad numérica mayor que cero. Obligatorio."),
+        ("Linea", "Línea interna asignada al programa. Opcional; tiene prioridad sobre Linea Prod Clte."),
+    ]
+    for description in descriptions:
+        instructions.append(description)
+    for cell in instructions[1]:
+        cell.fill = header_fill
+        cell.font = Font(color="FFFFFF", bold=True)
+    instructions.freeze_panes = "A2"
+
+    output = BytesIO()
+    workbook.save(output)
+    response = HttpResponse(
+        output.getvalue(),
+        content_type="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+    )
+    response["Content-Disposition"] = 'attachment; filename="plantilla_carga_programas.xlsx"'
+    return response
+
+
+@login_required
+@module_required("program_loading")
+def download_completed_programs(request):
+    orders = ProductionOrder.objects.filter(
+        Q(status=ProductionOrder.Status.COMPLETE) | Q(remaining_quantity=0)
+    ).select_related("part", "part__client").annotate(
+        completed_quantity=Sum("work_items__closes__quantity"),
+        last_close=Max("work_items__closes__closed_at"),
+    ).order_by("program", "part__client__name", "part__number")
+
+    workbook = Workbook()
+    sheet = workbook.active
+    sheet.title = "Programas completados"
+    headers = [
+        "Semana / Orden de Produccion", "Folio", "ID Cliente", "Cliente",
+        "Num. Parte", "Cantidad Programada", "Cantidad Terminada", "Restante",
+        "Fecha de Entrega", "Linea", "Estado", "Ultimo Cierre",
+    ]
+    sheet.append(headers)
+    header_fill = PatternFill("solid", fgColor="0875BD")
+    for cell in sheet[1]:
+        cell.fill = header_fill
+        cell.font = Font(color="FFFFFF", bold=True)
+        cell.alignment = Alignment(horizontal="center")
+
+    for order in orders:
+        client = order.part.client
+        completed = order.completed_quantity
+        if completed is None:
+            completed = order.quantity - order.remaining_quantity
+        last_close = order.last_close
+        if last_close and timezone.is_aware(last_close):
+            last_close = timezone.localtime(last_close).replace(tzinfo=None)
+        sheet.append([
+            order.program, order.folio, client.external_id if client else "",
+            client.name if client else "", order.part.number, order.quantity,
+            completed, order.remaining_quantity, order.required_date, order.line,
+            order.get_status_display(), last_close,
+        ])
+
+    widths = [30, 22, 16, 26, 22, 21, 20, 14, 18, 18, 16, 22]
+    for index, width in enumerate(widths, 1):
+        sheet.column_dimensions[chr(64 + index)].width = width
+    sheet.freeze_panes = "A2"
+    sheet.auto_filter.ref = f"A1:L{max(sheet.max_row, 1)}"
+    for row in range(2, sheet.max_row + 1):
+        sheet.cell(row, 9).number_format = "dd/mm/yyyy"
+        sheet.cell(row, 12).number_format = "dd/mm/yyyy hh:mm"
+        for column in (6, 7, 8):
+            sheet.cell(row, column).number_format = "0.###"
+
+    output = BytesIO()
+    workbook.save(output)
+    response = HttpResponse(
+        output.getvalue(),
+        content_type="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+    )
+    filename = timezone.localdate().strftime("programas_completados_%Y-%m-%d.xlsx")
+    response["Content-Disposition"] = f'attachment; filename="{filename}"'
+    return response
+
+
 @login_required
 @module_required("program_loading")
 def bulk_load_program(request):
@@ -75,18 +215,21 @@ def bulk_load_program(request):
             expected = ["ID Cliente", "Orden de Produccion", "Linea Prod Clte",
                         "Fecha de Entrega", "Num. Parte", "Cantidad"]
             actual = [_cell_text(sheet.cell(1, col).value) for col in range(1, 7)]
-            if actual != expected:
+            line_header = _cell_text(sheet.cell(1, 7).value)
+            if actual != expected or line_header not in ("", "Linea"):
                 raise ValidationError(
-                    "Los encabezados no coinciden con la plantilla. Se esperan: " + ", ".join(expected))
+                    "Los encabezados no coinciden con la plantilla. Se esperan: "
+                    + ", ".join(expected + ["Linea"]))
             employee = Employee.objects.get(payroll_number=form.cleaned_data["payroll_number"])
             rows, errors = [], []
             for row_number, row in enumerate(sheet.iter_rows(min_row=2, values_only=True), 2):
-                client, program, line = map(_cell_text, row[:3])
+                client, program, customer_line = map(_cell_text, row[:3])
                 required, part_number, raw_quantity = row[3], _cell_text(row[4]), row[5]
+                line = _cell_text(row[6] if len(row) > 6 else "") or customer_line
                 if not any((client, program, part_number, raw_quantity)):
                     continue
                 try:
-                    quantity = Decimal(str(raw_quantity).replace(",", ""))
+                    quantity = _cell_quantity(raw_quantity)
                 except (InvalidOperation, TypeError, ValueError):
                     errors.append(f"Fila {row_number}: cantidad inválida.")
                     continue
@@ -104,11 +247,14 @@ def bulk_load_program(request):
                 raise ValidationError("El archivo no contiene filas válidas para importar.")
             with transaction.atomic():
                 for client, program, line, required, part_number, quantity in rows:
+                    resolved_client = resolve_program_client(
+                        client_reference=client, part_number=part_number)
                     create_program_order(client_name=client, part_number=part_number,
                                          program=program, quantity=quantity,
                                          required_date=required, line=line,
                                          employee=employee, user=request.user,
-                                         comment=f"Carga masiva: {form.cleaned_data['file'].name}")
+                                         comment=f"Carga masiva: {form.cleaned_data['file'].name}",
+                                         client=resolved_client)
         except (ValidationError, KeyError, ValueError, BadZipFile, InvalidFileException) as exc:
             form.add_error("file", exc)
         else:
@@ -197,8 +343,28 @@ def work_list(request):
 @module_required("heliang")
 def heliang(request):
     action = request.POST.get("action")
-    start_form = StartProductionForm(request.POST if action == "start" else None, prefix="start")
-    close_form = CloseProductionForm(request.POST if action == "close" else None, prefix="close")
+    selected_order = None
+    if request.method == "GET" and request.GET.get("order"):
+        selected_order = ProductionOrder.objects.filter(
+            pk=request.GET["order"], status=ProductionOrder.Status.OPEN
+        ).first()
+    start_initial = ({"order": selected_order, "quantity": selected_order.remaining_quantity}
+                     if selected_order else None)
+    start_form = StartProductionForm(
+        request.POST if action == "start" else None,
+        prefix="start", initial=start_initial,
+    )
+    selected_work = None
+    if request.method == "GET" and request.GET.get("work"):
+        selected_work = WorkInProcess.objects.filter(
+            pk=request.GET["work"], status=WorkInProcess.Status.ACTIVE
+        ).select_related("order__part", "machine").first()
+    close_initial = ({"work_item": selected_work, "quantity": selected_work.remaining_quantity}
+                     if selected_work else None)
+    close_form = CloseProductionForm(
+        request.POST if action == "close" else None,
+        prefix="close", initial=close_initial,
+    )
     if request.method == "POST" and action == "start" and start_form.is_valid():
         employee = Employee.objects.get(payroll_number=start_form.cleaned_data["payroll_number"])
         try:
@@ -235,7 +401,8 @@ def heliang(request):
     return render(request, "operations/heliang.html", {
         "start_form": start_form, "close_form": close_form, "open_orders": open_orders,
         "active_items": active_items, "recent_closes": recent_closes,
-        "machine_rows": machine_rows})
+        "machine_rows": machine_rows, "selected_order": selected_order,
+        "selected_work": selected_work})
 
 
 @login_required
@@ -273,6 +440,31 @@ def line_dashboard(request):
         "today_weight": today_summary["weight"] or 0,
         "process_totals": process_totals, "open_orders": open_orders,
         "recent_closes": recent_closes,
+    })
+
+
+@login_required
+@module_required("line_dashboard")
+def progress_dashboard(request):
+    orders = ProductionOrder.objects.exclude(
+        status=ProductionOrder.Status.CANCELLED
+    ).select_related("part", "part__client").annotate(
+        completed_quantity=Sum("work_items__closes__quantity")
+    ).order_by("program", "part__client__name", "part__number")
+
+    progress_data = []
+    for order in orders:
+        completed = order.completed_quantity or Decimal("0")
+        progress_data.append({
+            "folio": order.folio,
+            "week": order.program or "Sin semana",
+            "client": order.part.client.name if order.part.client else "Sin cliente",
+            "part": order.part.number,
+            "programmed": float(order.quantity),
+            "completed": float(completed),
+        })
+    return render(request, "operations/progress_dashboard.html", {
+        "progress_data": progress_data,
     })
 
 

@@ -1,0 +1,46 @@
+{% extends 'base.html' %}
+{% load static %}
+{% block title %}Avance de producción · MESA{% endblock %}
+{% block content %}
+<link rel="stylesheet" href="{% static 'css/progress_dashboard.css' %}">
+<link rel="stylesheet" href="{% static 'css/progress_screen.css' %}">
+<div id="progress-screen" class="progress-screen">
+<div class="progress-head">
+  <div><span class="eyebrow">ANÁLISIS INTERACTIVO</span><h1>Avance de producción</h1><p>Selecciona una semana o cliente para cruzar todas las visualizaciones.</p></div>
+  <div class="filter-actions"><div id="active-filters" class="active-filters">Todos los datos</div><button id="clear-filters" class="button secondary" type="button">Limpiar filtros</button><button id="screen-mode" class="button screen-mode" type="button"><span>⛶</span> Modo pantalla</button></div>
+</div>
+
+<section class="progress-kpis">
+  <article><span>Programado</span><b id="kpi-programmed">0</b><small>piezas</small></article>
+  <article><span>Terminado</span><b id="kpi-completed">0</b><small>piezas</small></article>
+  <article><span>Pendiente</span><b id="kpi-pending">0</b><small>piezas</small></article>
+  <article><span>Órdenes</span><b id="kpi-orders">0</b><small>registros filtrados</small></article>
+</section>
+
+<section class="analytics-grid">
+  <article class="chart-card total-card">
+    <div class="chart-title"><div><span>AVANCE TOTAL</span><h2>Cumplimiento</h2></div><small id="total-context">Todos los datos</small></div>
+    <div class="donut-wrap"><div id="total-donut" class="progress-donut"><div><b id="total-percent">0%</b><span>completado</span></div></div></div>
+    <div class="total-legend"><span><i class="done"></i><b id="legend-completed">0</b> terminadas</span><span><i class="pending"></i><b id="legend-pending">0</b> pendientes</span></div>
+  </article>
+
+  <article class="chart-card week-card">
+    <div class="chart-title"><div><span>DESGLOSE</span><h2>Avance por semana</h2></div><small>Haz clic para filtrar</small></div>
+    <div id="week-chart" class="bar-chart"></div>
+  </article>
+
+  <article class="chart-card client-card">
+    <div class="chart-title"><div><span>DESGLOSE</span><h2>Avance por cliente</h2></div><small>Haz clic para filtrar</small></div>
+    <div id="client-chart" class="bar-chart client-chart"></div>
+  </article>
+</section>
+
+<section class="detail-card">
+  <div class="chart-title"><div><span>DATOS FILTRADOS</span><h2>Detalle de órdenes</h2></div><small id="detail-count">0 registros</small></div>
+  <div class="table-wrap"><table><thead><tr><th>Semana</th><th>Cliente</th><th>Parte</th><th>Programado</th><th>Terminado</th><th>Avance</th></tr></thead><tbody id="detail-body"></tbody></table></div>
+</section>
+
+</div>
+{{ progress_data|json_script:"progress-data" }}
+<script src="{% static 'js/progress_dashboard.js' %}"></script>
+{% endblock %}

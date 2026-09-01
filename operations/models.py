@@ -24,6 +24,7 @@ class Employee(TimeStamped):
 class Client(TimeStamped):
     code = models.CharField(max_length=30, unique=True)
     name = models.CharField(max_length=120)
+    external_id = models.CharField("ID cliente", max_length=30, blank=True, db_index=True)
     def __str__(self): return self.name
 
 

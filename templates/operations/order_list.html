@@ -1,3 +1,17 @@
-{% extends 'base.html' %}{% block content %}<div class="title-row"><div><h1>Programas y órdenes</h1><p>Órdenes cargadas y saldo disponible.</p></div><div><a class="button secondary" href="{% url 'bulk-load-program' %}">Carga masiva</a> <a class="button" href="{% url 'load-program' %}">Nuevo programa</a></div></div>
-<div class="panel table-wrap"><table><thead><tr><th>Folio</th><th>Programa</th><th>Parte</th><th>Cantidad</th><th>Restante</th><th>Requerida</th><th>Estado</th></tr></thead><tbody>
-{% for row in orders %}<tr><td>{{ row.folio }}</td><td>{{ row.program }}</td><td>{{ row.part.number }}</td><td>{{ row.quantity }}</td><td>{{ row.remaining_quantity }}</td><td>{{ row.required_date|default:'—' }}</td><td><span class="status {{ row.status|lower }}">{{ row.get_status_display }}</span></td></tr>{% empty %}<tr><td colspan="7">No hay órdenes.</td></tr>{% endfor %}</tbody></table></div>{% endblock %}
+{% extends 'base.html' %}
+{% block content %}
+<div class="title-row">
+  <div><h1>Programas y órdenes</h1><p>Órdenes cargadas y saldo disponible.</p></div>
+  <div><a class="button secondary" href="{% url 'download-completed-programs' %}">Descargar completados</a> <a class="button secondary" href="{% url 'bulk-load-program' %}">Carga masiva</a> <a class="button" href="{% url 'load-program' %}">Nuevo programa</a></div>
+</div>
+<div class="panel table-wrap">
+  <table>
+    <thead><tr><th>Folio</th><th>Semana / orden de producción</th><th>Cliente</th><th>Parte</th><th>Cantidad</th><th>Restante</th><th>Requerida</th><th>Estado</th></tr></thead>
+    <tbody>
+      {% for row in orders %}
+        <tr><td>{{ row.folio }}</td><td>{{ row.program }}</td><td>{{ row.part.client.name|default:'—' }}</td><td>{{ row.part.number }}</td><td>{{ row.quantity }}</td><td>{{ row.remaining_quantity }}</td><td>{{ row.required_date|default:'—' }}</td><td><span class="status {{ row.status|lower }}">{{ row.get_status_display }}</span></td></tr>
+      {% empty %}<tr><td colspan="8">No hay órdenes.</td></tr>{% endfor %}
+    </tbody>
+  </table>
+</div>
+{% endblock %}

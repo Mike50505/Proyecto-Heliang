@@ -1,8 +1,108 @@
-{% load static %}<!doctype html><html lang="es"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>Tablero de línea · MESA</title><link rel="stylesheet" href="{% static 'css/line_dashboard.css' %}"></head>
-<body><header class="line-header"><a href="{% url 'dashboard' %}" class="line-brand"><span>M</span><div><b>MESA</b><small>CONTROL DE PRODUCCIÓN</small></div></a><div class="line-title"><b>ESTADO DE LA LÍNEA</b><small>Heliang · Máquinas automáticas</small></div><div class="line-clock"><b id="clock">{{ now|date:'H:i:s' }}</b><small>{{ now|date:'d/m/Y' }} · Actualiza en <span id="countdown">30</span>s</small></div></header>
-<main><section class="line-kpis"><article class="kpi-blue"><span>ÓRDENES ABIERTAS</span><b>{{ open_count }}</b><small>programas pendientes</small></article><article class="kpi-orange"><span>MÁQUINAS ACTIVAS</span><b>{{ active_count }}<i>/{{ total_machines }}</i></b><small>{{ available_count }} disponibles</small></article><article class="kpi-green"><span>PRODUCCIÓN HOY</span><b>{{ today_quantity|floatformat:0 }}</b><small>piezas terminadas</small></article><article class="kpi-purple"><span>PESO PROCESADO</span><b>{{ today_weight|floatformat:1 }}<i> kg</i></b><small>{{ today_closes_count }} cierres registrados</small></article></section>
-<section class="screen-section"><div class="screen-heading"><div><h1>Estado de máquinas</h1><p>Operación actual y avance por equipo</p></div><div class="live"><i></i> EN VIVO</div></div><div class="line-machines">{% for row in machine_rows %}<article class="{% if row.work %}running{% else %}idle{% endif %}"><div class="machine-head"><span class="state-dot"></span><div><b>{{ row.machine.code }}</b><small>{% if row.work %}PRODUCIENDO{% else %}DISPONIBLE{% endif %}</small></div></div>{% if row.work %}<div class="machine-job"><span>{{ row.work.order.program }}</span><b>{{ row.work.order.part.number }}</b><small>{{ row.work.folio }} · {{ row.work.started_by.name|default:'Sin operador' }}</small></div><div class="progress-meta"><span>Avance estimado</span><b>{{ row.progress }}%</b></div><div class="progress"><i style="width:{{ row.progress }}%"></i></div><div class="machine-qty"><span>Inicial <b>{{ row.work.initial_quantity|floatformat:0 }}</b></span><span>Restante <b>{{ row.work.remaining_quantity|floatformat:0 }}</b></span></div>{% else %}<div class="idle-copy"><b>LISTA</b><small>Esperando asignación</small></div>{% endif %}</article>{% empty %}<p>No hay máquinas configuradas.</p>{% endfor %}</div></section>
-<div class="line-lower"><section class="screen-panel queue"><div class="panel-title"><h2>Próximos programas</h2><span>{{ open_count }} pendientes</span></div><table><thead><tr><th>Programa</th><th>Parte</th><th>Cliente</th><th>Saldo</th><th>Entrega</th></tr></thead><tbody>{% for row in open_orders %}<tr><td><b>{{ row.program }}</b><small>{{ row.folio }}</small></td><td>{{ row.part.number }}</td><td>{{ row.part.client.name|default:'—' }}</td><td><strong>{{ row.remaining_quantity|floatformat:0 }}</strong></td><td>{{ row.required_date|date:'d/m'|default:'—' }}</td></tr>{% empty %}<tr><td colspan="5">Sin programas pendientes</td></tr>{% endfor %}</tbody></table></section>
-<section class="screen-panel process-load"><div class="panel-title"><h2>Material por proceso</h2><span>piezas actuales</span></div><div class="process-bars">{% for row in process_totals %}<div><label><span>{{ row.name }}</span><b>{{ row.total|floatformat:0 }}</b></label><i><em style="width:{% widthratio row.total process_totals.0.total 100 %}%"></em></i></div>{% empty %}<p>Sin material registrado</p>{% endfor %}</div></section>
-<section class="screen-panel latest"><div class="panel-title"><h2>Últimos cierres</h2><span>hoy</span></div><div class="close-list">{% for row in recent_closes %}<article><time>{{ row.closed_at|date:'H:i' }}</time><div><b>{{ row.work_item.order.part.number }}</b><small>{{ row.work_item.order.program }} · {{ row.work_item.machine.code }}</small></div><strong>+{{ row.quantity|floatformat:0 }}</strong></article>{% empty %}<p>Sin cierres el día de hoy</p>{% endfor %}</div></section></div></main>
-<footer><span><i></i>Sistema conectado</span><b>MESA · Operación en tiempo real</b><span>Actualización automática cada 30 segundos</span></footer><script>const clock=document.getElementById('clock'),countdown=document.getElementById('countdown');let left=30;setInterval(()=>{clock.textContent=new Date().toLocaleTimeString('es-MX',{hour12:false});left-=1;countdown.textContent=left;if(left<=0)location.reload()},1000)</script></body></html>
+{% load static %}
+<!doctype html>
+<html lang="es">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width,initial-scale=1">
+  <title>Tablero de línea · MESA</title>
+  <link rel="stylesheet" href="{% static 'css/line_dashboard.css' %}">
+  <link rel="stylesheet" href="{% static 'css/fullscreen.css' %}">
+</head>
+<body>
+  <header class="line-header">
+    <a href="{% url 'dashboard' %}" class="line-brand"><span>M</span><div><b>MESA</b><small>CONTROL DE PRODUCCIÓN</small></div></a>
+    <div class="line-title"><b>ESTADO DE LA LÍNEA</b><small>Heliang · Máquinas automáticas</small></div>
+    <button id="open-progress-screen" class="analytics-screen-button" type="button" disabled><span class="analytics-icon" aria-hidden="true">▥</span><span class="analytics-copy"><b>GRÁFICAS DE AVANCE</b><small>Abrir en pantalla completa</small></span><span class="analytics-arrow" aria-hidden="true">→</span></button>
+    <div class="line-clock"><b id="clock">{{ now|date:'H:i:s' }}</b><small>{{ now|date:'d/m/Y' }} · Actualiza en <span id="countdown">30</span>s</small></div>
+  </header>
+  <button id="fullscreen-toggle" class="fullscreen-toggle" type="button" title="Mostrar tablero en pantalla completa" aria-label="Mostrar tablero en pantalla completa"><span aria-hidden="true">⛶</span><b>Pantalla completa</b></button>
+  <iframe id="progress-screen-frame" class="progress-screen-frame" src="{% url 'progress-dashboard' %}" title="Gráficas de avance" allowfullscreen></iframe>
+  <main>
+    <section class="line-kpis">
+      <article class="kpi-blue"><span>ÓRDENES ABIERTAS</span><b>{{ open_count }}</b><small>programas pendientes</small></article>
+      <article class="kpi-orange"><span>MÁQUINAS ACTIVAS</span><b>{{ active_count }}<i>/{{ total_machines }}</i></b><small>{{ available_count }} disponibles</small></article>
+      <article class="kpi-green"><span>PRODUCCIÓN HOY</span><b>{{ today_quantity|floatformat:0 }}</b><small>piezas terminadas</small></article>
+      <article class="kpi-purple"><span>PESO PROCESADO</span><b>{{ today_weight|floatformat:1 }}<i> kg</i></b><small>{{ today_closes_count }} cierres registrados</small></article>
+    </section>
+    <section class="screen-section">
+      <div class="screen-heading"><div><h1>Estado de máquinas</h1><p>Operación actual y avance por equipo</p></div><div class="live"><i></i> EN VIVO</div></div>
+      <div class="line-machines">
+        {% for row in machine_rows %}
+          <article class="{% if row.work %}running{% else %}idle{% endif %}">
+            <div class="machine-head"><span class="state-dot"></span><div><b>{{ row.machine.code }}</b><small>{% if row.work %}PRODUCIENDO{% else %}DISPONIBLE{% endif %}</small></div></div>
+            {% if row.work %}
+              <div class="machine-job"><span>{{ row.work.order.program }}</span><b>{{ row.work.order.part.number }}</b><small>{{ row.work.folio }} · {{ row.work.started_by.name|default:'Sin operador' }}</small></div>
+              <div class="progress-meta"><span>Avance estimado</span><b>{{ row.progress }}%</b></div>
+              <div class="progress"><i style="width:{{ row.progress }}%"></i></div>
+              <div class="machine-qty"><span>Inicial <b>{{ row.work.initial_quantity|floatformat:0 }}</b></span><span>Restante <b>{{ row.work.remaining_quantity|floatformat:0 }}</b></span></div>
+            {% else %}
+              <div class="idle-copy"><b>LISTA</b><small>Esperando asignación</small></div>
+            {% endif %}
+          </article>
+        {% empty %}<p>No hay máquinas configuradas.</p>{% endfor %}
+      </div>
+    </section>
+    <div class="line-lower">
+      <section class="screen-panel queue">
+        <div class="panel-title"><h2>Próximos programas</h2><span>{{ open_count }} pendientes</span></div>
+        <table><thead><tr><th>Programa</th><th>Parte</th><th>Cliente</th><th>Saldo</th><th>Entrega</th></tr></thead><tbody>
+          {% for row in open_orders %}<tr><td><b>{{ row.program }}</b><small>{{ row.folio }}</small></td><td>{{ row.part.number }}</td><td>{{ row.part.client.name|default:'—' }}</td><td><strong>{{ row.remaining_quantity|floatformat:0 }}</strong></td><td>{{ row.required_date|date:'d/m'|default:'—' }}</td></tr>{% empty %}<tr><td colspan="5">Sin programas pendientes</td></tr>{% endfor %}
+        </tbody></table>
+      </section>
+      <section class="screen-panel process-load">
+        <div class="panel-title"><h2>Material por proceso</h2><span>piezas actuales</span></div>
+        <div class="process-bars">{% for row in process_totals %}<div><label><span>{{ row.name }}</span><b>{{ row.total|floatformat:0 }}</b></label><i><em style="width:{% widthratio row.total process_totals.0.total 100 %}%"></em></i></div>{% empty %}<p>Sin material registrado</p>{% endfor %}</div>
+      </section>
+      <section class="screen-panel latest">
+        <div class="panel-title"><h2>Últimos cierres</h2><span>hoy</span></div>
+        <div class="close-list">{% for row in recent_closes %}<article><time>{{ row.closed_at|date:'H:i' }}</time><div><b>{{ row.work_item.order.part.number }}</b><small>{{ row.work_item.order.program }} · {{ row.work_item.machine.code }}</small></div><strong>+{{ row.quantity|floatformat:0 }}</strong></article>{% empty %}<p>Sin cierres el día de hoy</p>{% endfor %}</div>
+      </section>
+    </div>
+  </main>
+  <footer><span><i></i>Sistema conectado</span><b>MESA · Operación en tiempo real</b><span>Actualización automática cada 30 segundos</span></footer>
+  <script>
+    const clock = document.getElementById('clock');
+    const countdown = document.getElementById('countdown');
+    const fullscreenToggle = document.getElementById('fullscreen-toggle');
+    let left = 30;
+    setInterval(() => {
+      clock.textContent = new Date().toLocaleTimeString('es-MX', {hour12: false});
+      left -= 1;
+      countdown.textContent = left;
+      if (left <= 0) location.reload();
+    }, 1000);
+
+    function updateFullscreenButton() {
+      const active = Boolean(document.fullscreenElement);
+      fullscreenToggle.querySelector('b').textContent = active ? 'Salir de pantalla completa' : 'Pantalla completa';
+      fullscreenToggle.querySelector('span').textContent = active ? '×' : '⛶';
+      fullscreenToggle.title = active ? 'Salir de pantalla completa (Esc)' : 'Mostrar tablero en pantalla completa';
+      fullscreenToggle.setAttribute('aria-label', fullscreenToggle.title);
+    }
+
+    fullscreenToggle.addEventListener('click', async () => {
+      try {
+        if (document.fullscreenElement) await document.exitFullscreen();
+        else await document.documentElement.requestFullscreen();
+      } catch (error) {
+        console.error('No se pudo cambiar el modo de pantalla completa', error);
+      }
+    });
+    document.addEventListener('fullscreenchange', updateFullscreenButton);
+    updateFullscreenButton();
+
+    const progressFrame = document.getElementById('progress-screen-frame');
+    const openProgressScreen = document.getElementById('open-progress-screen');
+    progressFrame.addEventListener('load', () => { openProgressScreen.disabled = false; });
+    openProgressScreen.addEventListener('click', async () => {
+      try {
+        const progressScreen = progressFrame.contentDocument.getElementById('progress-screen');
+        if (!progressScreen) throw new Error('No se encontró el tablero de avance');
+        await progressScreen.requestFullscreen();
+      } catch (error) {
+        window.location.href = "{% url 'progress-dashboard' %}";
+      }
+    });
+  </script>
+</body>
+</html>

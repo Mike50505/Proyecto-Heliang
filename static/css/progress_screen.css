@@ -1,0 +1,212 @@
+.screen-mode {
+  white-space: nowrap;
+  background: var(--navy);
+}
+
+.screen-mode span {
+  margin-right: 4px;
+  font-size: 17px;
+}
+
+.progress-screen:fullscreen {
+  width: 100vw;
+  height: 100vh;
+  overflow: hidden;
+  padding: 2vh 2vw;
+  color: #f4f8fb;
+  background: radial-gradient(circle at 20% 0, #153a55 0, #07121e 42%);
+  display: grid;
+  grid-template-rows: auto auto minmax(0, 1fr);
+  gap: 1.5vh;
+}
+
+.progress-screen:fullscreen .progress-head {
+  margin: 0;
+  align-items: center;
+}
+
+.progress-screen:fullscreen .progress-head h1 {
+  font-size: clamp(32px, 3vw, 48px);
+}
+
+.progress-screen:fullscreen .progress-head p {
+  color: #a9bfce;
+  font-size: clamp(15px, 1.25vw, 21px);
+}
+
+.progress-screen:fullscreen .eyebrow {
+  color: #48d7e9;
+  font-size: clamp(12px, .9vw, 16px);
+}
+
+.progress-screen:fullscreen .active-filters {
+  color: #b7cad8;
+  font-size: clamp(14px, 1vw, 18px);
+}
+
+.progress-screen:fullscreen .filter-chip {
+  color: #dff8ff;
+  background: #174c68;
+}
+
+.progress-screen:fullscreen .button {
+  padding: 10px 14px;
+  font-size: clamp(12px, .9vw, 16px);
+}
+
+.progress-screen:fullscreen .progress-kpis {
+  margin: 0;
+  gap: 1vw;
+}
+
+.progress-screen:fullscreen .progress-kpis article,
+.progress-screen:fullscreen .chart-card {
+  border-color: #29475d;
+  background: linear-gradient(145deg, #112a3e, #0b1c2a);
+  box-shadow: 0 10px 30px #0004;
+}
+
+.progress-screen:fullscreen .progress-kpis article {
+  padding: 1.4vh 1.2vw;
+}
+
+.progress-screen:fullscreen .progress-kpis span {
+  color: #9fb6c7;
+  font-size: clamp(12px, .9vw, 16px);
+}
+
+.progress-screen:fullscreen .progress-kpis b {
+  margin: .3vh 0;
+  color: #fff;
+  font-size: clamp(34px, 3vw, 50px);
+  line-height: 1;
+}
+
+.progress-screen:fullscreen .progress-kpis small {
+  color: #8fa8bb;
+  font-size: clamp(11px, .8vw, 14px);
+}
+
+.progress-screen:fullscreen .analytics-grid {
+  height: 100%;
+  min-height: 0;
+  grid-template-columns: .72fr 1fr 1.25fr;
+  gap: 1vw;
+}
+
+.progress-screen:fullscreen .chart-card {
+  height: 100%;
+  min-height: 0;
+  padding: 1.5vh 1.2vw;
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
+}
+
+.progress-screen:fullscreen .chart-title {
+  margin-bottom: 1.2vh;
+}
+
+.progress-screen:fullscreen .chart-title span {
+  color: #48d7e9;
+  font-size: clamp(11px, .75vw, 14px);
+}
+
+.progress-screen:fullscreen .chart-title h2 {
+  color: #fff;
+  font-size: clamp(22px, 1.7vw, 31px);
+}
+
+.progress-screen:fullscreen .chart-title small {
+  color: #91aabd;
+  font-size: clamp(10px, .75vw, 14px);
+}
+
+.progress-screen:fullscreen .donut-wrap {
+  flex: 1;
+  min-height: 0;
+}
+
+.progress-screen:fullscreen .progress-donut {
+  width: min(28vh, 90%);
+  max-width: none;
+  background: conic-gradient(#32d296 var(--progress), #21394b 0);
+}
+
+.progress-screen:fullscreen .progress-donut::before {
+  inset: 2.3vh;
+  background: #0e2232;
+}
+
+.progress-screen:fullscreen .progress-donut b {
+  color: #fff;
+  font-size: clamp(42px, 4vw, 68px);
+}
+
+.progress-screen:fullscreen .progress-donut span {
+  color: #9fb5c5;
+  font-size: clamp(13px, 1vw, 18px);
+}
+
+.progress-screen:fullscreen .total-legend {
+  color: #b3c5d2;
+  font-size: clamp(12px, .9vw, 16px);
+}
+
+.progress-screen:fullscreen .bar-chart {
+  flex: 1;
+  min-height: 0;
+  max-height: none;
+  gap: 1vh;
+  overflow: hidden;
+}
+
+.progress-screen:fullscreen .chart-bar {
+  padding: 1.1vh .9vw;
+  color: #fff;
+  border-color: #29465a;
+  background: #10283b;
+}
+
+.progress-screen:fullscreen .chart-bar:hover,
+.progress-screen:fullscreen .chart-bar.selected {
+  border-color: #35c9dd;
+  background: #16435a;
+}
+
+.progress-screen:fullscreen .bar-meta {
+  margin-bottom: .7vh;
+  font-size: clamp(14px, 1.05vw, 20px);
+}
+
+.progress-screen:fullscreen .bar-meta span {
+  color: #d9f6fa;
+  font-weight: 800;
+}
+
+.progress-screen:fullscreen .bar-track {
+  height: clamp(10px, 1.25vh, 16px);
+  background: #263f52;
+}
+
+.progress-screen:fullscreen .bar-values {
+  margin-top: .5vh;
+  color: #9fb6c7;
+  font-size: clamp(10px, .75vw, 14px);
+}
+
+.progress-screen:fullscreen .detail-card {
+  display: none;
+}
+
+.progress-screen:fullscreen .screen-mode {
+  position: fixed;
+  z-index: 5;
+  right: 1vw;
+  bottom: 1vh;
+  opacity: .3;
+}
+
+.progress-screen:fullscreen .screen-mode:hover {
+  opacity: 1;
+}

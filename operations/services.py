@@ -24,17 +24,43 @@ def next_folio(model, prefix, moment=None):
     return candidate
 
 
+def resolve_program_client(*, client_reference, part_number):
+    reference = client_reference.strip()
+    part_number = part_number.strip()
+    part = Part.objects.select_related("client").filter(number=part_number).first()
+    mapped_client = part.client if part else None
+
+    if reference and reference.upper() not in {"#N/A", "N/A", "NA"}:
+        candidates = Client.objects.filter(external_id__iexact=reference)
+        if mapped_client and candidates.filter(pk=mapped_client.pk).exists():
+            return mapped_client
+        if candidates.count() == 1:
+            return candidates.first()
+        direct = Client.objects.filter(code__iexact=reference).first()
+        if direct:
+            return direct
+
+    if mapped_client:
+        return mapped_client
+
+    raise ValidationError(
+        f"No se encontró un cliente para el ID '{reference or 'vacío'}' "
+        f"ni para el número de parte '{part_number}'."
+    )
+
+
 @transaction.atomic
 def create_program_order(*, client_name, part_number, program, quantity, employee=None,
-                         required_date=None, line="", comment="", user=None):
+                         required_date=None, line="", comment="", user=None, client=None):
     quantity = Decimal(quantity)
     if quantity <= 0:
         raise ValidationError("La cantidad debe ser mayor que cero.")
     client_name = client_name.strip()
-    client_code = re.sub(r"[^A-Z0-9]+", "-", client_name.upper()).strip("-")[:30] or "SIN-CLIENTE"
-    client, _ = Client.objects.get_or_create(code=client_code, defaults={"name": client_name})
+    if client is None:
+        client_code = re.sub(r"[^A-Z0-9]+", "-", client_name.upper()).strip("-")[:30] or "SIN-CLIENTE"
+        client, _ = Client.objects.get_or_create(code=client_code, defaults={"name": client_name})
     part, _ = Part.objects.get_or_create(number=part_number.strip(), defaults={"client": client})
-    if not part.client_id:
+    if part.client_id != client.pk:
         part.client = client
         part.save(update_fields=["client", "updated_at"])
     order = ProductionOrder.objects.create(

@@ -123,7 +123,7 @@ class Command(BaseCommand):
     def import_inventory(self, wb, stats):
         ws = wb["RESUMEN"]
         program_names = [text(ws.cell(3, col).value) or f"Programa {col-4}" for col in range(5, 15)]
-        pending_buckets = []
+        pending_buckets = {}
         for row in ws.iter_rows(min_row=5, values_only=True):
             part_number = text(row[2] if len(row) > 2 else "")
             if not part_number: continue
@@ -131,18 +131,20 @@ class Command(BaseCommand):
             inv, _ = Inventory.objects.update_or_create(part=part, defaults={
                 "surplus": number(row[31] if len(row) > 31 else 0), "real": number(row[32] if len(row) > 32 else 0)})
             for offset, name in enumerate(program_names, 4):
-                pending_buckets.append(InventoryBucket(inventory=inv, kind="PROGRAM", name=name,
-                    quantity=number(row[offset] if len(row) > offset else 0)))
+                bucket = InventoryBucket(inventory=inv, kind="PROGRAM", name=name,
+                    quantity=number(row[offset] if len(row) > offset else 0))
+                pending_buckets[(inv.pk, bucket.kind, bucket.name)] = bucket
             for offset, name in enumerate(PROCESS_NAMES, 14):
-                pending_buckets.append(InventoryBucket(inventory=inv, kind="PROCESS", name=name,
-                    quantity=number(row[offset] if len(row) > offset else 0)))
+                bucket = InventoryBucket(inventory=inv, kind="PROCESS", name=name,
+                    quantity=number(row[offset] if len(row) > offset else 0))
+                pending_buckets[(inv.pk, bucket.kind, bucket.name)] = bucket
             stats["inventarios"] += 1
             if len(pending_buckets) >= 5000:
-                InventoryBucket.objects.bulk_create(pending_buckets, update_conflicts=True,
+                InventoryBucket.objects.bulk_create(list(pending_buckets.values()), update_conflicts=True,
                     update_fields=["quantity", "updated_at"], unique_fields=["inventory", "kind", "name"])
                 pending_buckets.clear()
         if pending_buckets:
-            InventoryBucket.objects.bulk_create(pending_buckets, update_conflicts=True,
+            InventoryBucket.objects.bulk_create(list(pending_buckets.values()), update_conflicts=True,
                 update_fields=["quantity", "updated_at"], unique_fields=["inventory", "kind", "name"])
 
     def import_orders(self, wb, stats):
