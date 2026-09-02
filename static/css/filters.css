@@ -1,0 +1,30 @@
+.filters {
+  flex-wrap: wrap;
+}
+
+.filters.panel {
+  margin: 0 0 20px;
+  padding: 16px;
+}
+
+.filters label {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+
+.filters .grow {
+  flex: 1;
+  min-width: 260px;
+}
+
+.row-actions { display:flex; gap:6px; }
+.button.compact { padding:7px 10px; font-size:12px; }
+.button.danger,button.danger { color:#fff; background:#b83b47; }
+.delete-warning { margin:20px 0; padding:14px; border:1px solid #efb4b9; border-radius:8px; color:#8c2932; background:#fff0f1; }
+
+@media (max-width: 520px) {
+  .filters .grow {
+    min-width: 0;
+  }
+}

@@ -8,8 +8,8 @@ from django.db import transaction
 from django.utils import timezone
 from openpyxl import load_workbook
 from openpyxl.utils.datetime import to_excel
-from operations.models import (Client, Employee, Inventory, InventoryBucket, Machine, Movement, Part, Process,
-                               ProductionClose, ProductionOrder, WorkInProcess)
+from operations.models import (Client, Inventory, InventoryBucket, Machine, ModuleAccess, Movement,
+                               Part, Process, ProductionClose, ProductionOrder, WorkInProcess)
 
 
 PROCESS_NAMES = ["Corte", "Doblez", "Expansion", "Reduccion", "Perforacion", "Perforacion Con Broca",
@@ -86,7 +86,8 @@ class Command(BaseCommand):
 
     def employee(self, payroll):
         payroll = text(payroll)
-        return Employee.objects.filter(payroll_number=payroll).first() if payroll else None
+        access = ModuleAccess.objects.select_related("user").filter(payroll_number=payroll).first()
+        return access.user if access else None
 
     def part(self, part_number, client_name=""):
         part_number = text(part_number)
@@ -103,9 +104,16 @@ class Command(BaseCommand):
         for row in wb["USUARIOS"].iter_rows(min_row=2, values_only=True):
             payroll = text(row[0])
             if not payroll: continue
-            Employee.objects.update_or_create(payroll_number=payroll, defaults={"name": text(row[1]) or payroll,
-                "area": text(row[2]), "identifier": text(row[3]), "active": True})
-            stats["empleados"] += 1
+            User = get_user_model()
+            user, created = User.objects.get_or_create(username=payroll, defaults={
+                "first_name": (text(row[1]) or payroll)[:150], "is_active": False})
+            if created:
+                user.set_unusable_password()
+                user.save(update_fields=["password"])
+            access, _ = ModuleAccess.objects.get_or_create(user=user)
+            access.payroll_number = payroll
+            access.save(update_fields=["payroll_number"])
+            stats["usuarios_historicos"] += 1
         for index, name in enumerate(PROCESS_NAMES, 1):
             Process.objects.update_or_create(code=name.lower().replace(" ", "-"), defaults={"name": name, "position": index})
         if "PROCESOS" in wb.sheetnames:

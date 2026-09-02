@@ -1,6 +1,7 @@
-const progressRows = JSON.parse(document.getElementById('progress-data').textContent);
+let progressRows = JSON.parse(document.getElementById('progress-data').textContent);
 const state = {week: null, client: null};
-const numberFormat = new Intl.NumberFormat('es-MX', {maximumFractionDigits: 0});
+let chartStyle = localStorage.getItem('mesa-progress-chart-style') || 'horizontal';
+const numberFormat = new Intl.NumberFormat('es-MX', {maximumFractionDigits: 3});
 
 function escapeHtml(value) {
   return String(value).replace(/[&<>'"]/g, char => ({'&':'&amp;','<':'&lt;','>':'&gt;',"'":'&#39;','"':'&quot;'}[char]));
@@ -38,12 +39,36 @@ function weekOrder(a, b) {
 
 function renderBars(targetId, groups, filterKey) {
   const target = document.getElementById(targetId);
+  const legend = target.closest('.chart-card').querySelector('[data-chart-legend]');
+  target.classList.remove('style-horizontal', 'style-classic', 'style-donut');
+  target.classList.add(`style-${chartStyle}`);
+  if (chartStyle === 'classic') {
+    legend.innerHTML = '<span><i class="programmed"></i>Programado</span><span><i class="completed"></i>Terminado</span><small>Altura = cantidad de piezas</small>';
+  } else {
+    legend.innerHTML = '<span><i class="completed"></i>Terminado</span><span><i class="pending"></i>Pendiente</span><small>Color = porcentaje de avance</small>';
+  }
   if (!groups.length) {
     target.innerHTML = '<div class="empty-chart">No hay datos para esta selección.</div>';
     return;
   }
+  const maxProgrammed = Math.max(...groups.map(item => item.programmed), 1);
   target.innerHTML = groups.map(item => {
     const selected = state[filterKey] === item.name ? ' selected' : '';
+    if (chartStyle === 'classic') {
+      const programmedHeight = item.programmed / maxProgrammed * 100;
+      const completedHeight = Math.min(item.completed / maxProgrammed * 100, 100);
+      return `<button class="classic-bar${selected}" type="button" data-filter="${filterKey}" data-value="${escapeHtml(item.name)}" title="${escapeHtml(item.name)}: ${item.percent.toFixed(1)}% completado">
+        <div class="classic-plot"><i style="height:${programmedHeight}%" title="${numberFormat.format(item.programmed)} programadas"></i><i class="completed" style="height:${completedHeight}%" title="${numberFormat.format(item.completed)} terminadas"></i></div>
+        <div class="classic-values"><span>P: ${numberFormat.format(item.programmed)}</span><span>T: ${numberFormat.format(item.completed)}</span></div>
+        <b>${escapeHtml(item.name)}</b><small>${item.percent.toFixed(1)}% completado</small>
+      </button>`;
+    }
+    if (chartStyle === 'donut') {
+      return `<button class="mini-donut-card${selected}" type="button" data-filter="${filterKey}" data-value="${escapeHtml(item.name)}" title="Filtrar por ${escapeHtml(item.name)}">
+        <span class="mini-donut" style="--progress:${item.percent * 3.6}deg"><b>${item.percent.toFixed(1)}%</b></span>
+        <b>${escapeHtml(item.name)}</b><small>${numberFormat.format(item.completed)} / ${numberFormat.format(item.programmed)}</small>
+      </button>`;
+    }
     return `<button class="chart-bar${selected}" type="button" data-filter="${filterKey}" data-value="${escapeHtml(item.name)}" title="Filtrar por ${escapeHtml(item.name)}">
       <div class="bar-meta"><b>${escapeHtml(item.name)}</b><span>${item.percent.toFixed(1)}%</span></div>
       <div class="bar-track"><i style="width:${item.percent}%"></i></div>
@@ -100,6 +125,15 @@ document.getElementById('clear-filters').addEventListener('click', () => {
   render();
 });
 
+const chartStyleSelect = document.getElementById('chart-style');
+if (![...chartStyleSelect.options].some(option => option.value === chartStyle)) chartStyle = 'horizontal';
+chartStyleSelect.value = chartStyle;
+chartStyleSelect.addEventListener('change', () => {
+  chartStyle = chartStyleSelect.value;
+  localStorage.setItem('mesa-progress-chart-style', chartStyle);
+  render();
+});
+
 const progressScreen = document.getElementById('progress-screen');
 const screenMode = document.getElementById('screen-mode');
 function updateScreenMode() {
@@ -117,3 +151,32 @@ screenMode.addEventListener('click', async () => {
 document.addEventListener('fullscreenchange', updateScreenMode);
 
 render();
+
+const refreshStatus = document.getElementById('progress-refresh-status');
+let refreshing = false;
+
+async function refreshProgress() {
+  if (refreshing || document.hidden) return;
+  refreshing = true;
+  try {
+    const response = await fetch(window.progressDataUrl, {
+      headers: {'X-Requested-With': 'XMLHttpRequest'},
+      cache: 'no-store',
+    });
+    if (!response.ok) throw new Error(`HTTP ${response.status}`);
+    const data = await response.json();
+    progressRows = data.progress_data;
+    render();
+    refreshStatus.textContent = 'Actualizado · próxima consulta en 30 segundos';
+  } catch (error) {
+    refreshStatus.textContent = 'Sin conexión · reintentando';
+    console.error('No se pudo actualizar el avance de producción', error);
+  } finally {
+    refreshing = false;
+  }
+}
+
+setInterval(refreshProgress, 30000);
+document.addEventListener('visibilitychange', () => {
+  if (!document.hidden) refreshProgress();
+});

@@ -1,15 +1,17 @@
 import csv
 from io import BytesIO
 from zipfile import BadZipFile
-from datetime import date, datetime, time
+from datetime import date, datetime, time, timedelta
 from decimal import Decimal, InvalidOperation
 from django.contrib import messages
 from django.contrib.auth.decorators import login_required
 from django.core.exceptions import ValidationError
 from django.db import transaction
 from django.db.models import Count, Max, Q, Sum
-from django.http import HttpResponse
-from django.shortcuts import redirect, render
+from django.db.models.functions import TruncDate
+from django.http import HttpResponse, JsonResponse
+from django.shortcuts import get_object_or_404, redirect, render
+from django.template.loader import render_to_string
 from django.utils import timezone
 from openpyxl import Workbook, load_workbook
 from openpyxl.styles import Alignment, Font, PatternFill
@@ -18,8 +20,9 @@ from openpyxl.worksheet.datavalidation import DataValidation
 from openpyxl.utils.exceptions import InvalidFileException
 from .access import module_required
 from .forms import (BulkProgramForm, CloseProductionForm, ProcessMovementForm,
-                    ProgramOrderForm, StartProductionForm, SurplusMovementForm)
-from .models import (Employee, Inventory, InventoryBucket, Machine, Movement, Process, ProductionClose,
+                    ProductionOrderEditForm, ProgramOrderForm, StartProductionForm,
+                    SurplusMovementForm)
+from .models import (AuditEvent, Inventory, InventoryBucket, Machine, Movement, Process, ProductionClose,
                      ProductionOrder, WorkInProcess)
 from .services import (close_production, create_program_order, move_process_material,
                        move_surplus, resolve_program_client, start_production)
@@ -40,8 +43,85 @@ def dashboard(request):
 @login_required
 @module_required("program_loading")
 def order_list(request):
-    orders = ProductionOrder.objects.select_related("part", "part__client").order_by("-created_at")[:500]
-    return render(request, "operations/order_list.html", {"orders": orders})
+    orders = ProductionOrder.objects.select_related("part", "part__client")
+    query = request.GET.get("q", "").strip()
+    status = request.GET.get("status", "").strip()
+    start = _valid_date(request.GET.get("start"))
+    end = _valid_date(request.GET.get("end"))
+    if query:
+        orders = orders.filter(
+            Q(folio__icontains=query) | Q(program__icontains=query) |
+            Q(part__number__icontains=query) | Q(part__client__name__icontains=query)
+        )
+    valid_statuses = {value for value, _ in ProductionOrder.Status.choices}
+    if status in valid_statuses:
+        orders = orders.filter(status=status)
+    else:
+        status = ""
+    if start:
+        orders = orders.filter(required_date__gte=start)
+    if end:
+        orders = orders.filter(required_date__lte=end)
+    return render(request, "operations/order_list.html", {
+        "orders": orders.order_by("-created_at")[:500], "query": query, "status": status,
+        "start": start.isoformat() if start else "", "end": end.isoformat() if end else "",
+        "status_choices": ProductionOrder.Status.choices,
+    })
+
+
+def _valid_date(value):
+    try:
+        return date.fromisoformat(value) if value else None
+    except ValueError:
+        return None
+
+
+@login_required
+@module_required("program_loading")
+def edit_order(request, pk):
+    order = get_object_or_404(ProductionOrder.objects.select_related("part"), pk=pk)
+    form = ProductionOrderEditForm(request.POST or None, instance=order)
+    if request.method == "POST" and form.is_valid():
+        with transaction.atomic():
+            order = form.save()
+            Movement.objects.filter(
+                folio=order.folio, movement_type=Movement.Type.PROGRAM
+            ).update(part=order.part, destination=order.program, program=order.program,
+                     quantity=order.quantity)
+            AuditEvent.objects.create(
+                user=request.user, action="EDIT_PROGRAM", entity="ProductionOrder",
+                entity_id=order.folio, data={"program": order.program,
+                                             "quantity": str(order.quantity)})
+        messages.success(request, f"La orden {order.folio} fue actualizada.")
+        return redirect("order-list")
+    return render(request, "operations/form.html", {
+        "form": form, "title": f"Editar orden {order.folio}", "button": "Guardar cambios",
+    })
+
+
+@login_required
+@module_required("program_loading")
+def delete_order(request, pk):
+    order = get_object_or_404(ProductionOrder, pk=pk)
+    has_production = order.work_items.exists()
+    has_material = InventoryBucket.objects.filter(
+        kind="PROGRAM", name=order.program, quantity__gt=0).exists()
+    blocked = has_production or has_material
+    if request.method == "POST":
+        if blocked:
+            messages.error(request, "No se puede eliminar una orden con producción o material asociado.")
+            return redirect("order-list")
+        folio = order.folio
+        with transaction.atomic():
+            Movement.objects.filter(folio=folio, movement_type=Movement.Type.PROGRAM).delete()
+            order.delete()
+            AuditEvent.objects.create(user=request.user, action="DELETE_PROGRAM",
+                                      entity="ProductionOrder", entity_id=folio)
+        messages.success(request, f"La orden {folio} fue eliminada.")
+        return redirect("order-list")
+    return render(request, "operations/order_confirm_delete.html", {
+        "order": order, "blocked": blocked,
+    })
 
 
 @login_required
@@ -49,7 +129,7 @@ def order_list(request):
 def load_program(request):
     form = ProgramOrderForm(request.POST or None)
     if request.method == "POST" and form.is_valid():
-        employee = Employee.objects.get(payroll_number=form.cleaned_data["payroll_number"])
+        employee = request.user
         order = create_program_order(
             client_name=form.cleaned_data["client"], part_number=form.cleaned_data["part_number"],
             program=form.cleaned_data["program"], quantity=form.cleaned_data["quantity"],
@@ -220,7 +300,7 @@ def bulk_load_program(request):
                 raise ValidationError(
                     "Los encabezados no coinciden con la plantilla. Se esperan: "
                     + ", ".join(expected + ["Linea"]))
-            employee = Employee.objects.get(payroll_number=form.cleaned_data["payroll_number"])
+            employee = request.user
             rows, errors = [], []
             for row_number, row in enumerate(sheet.iter_rows(min_row=2, values_only=True), 2):
                 client, program, customer_line = map(_cell_text, row[:3])
@@ -268,7 +348,7 @@ def bulk_load_program(request):
 def surplus(request):
     form = SurplusMovementForm(request.POST or None)
     if request.method == "POST" and form.is_valid():
-        employee = Employee.objects.get(payroll_number=form.cleaned_data["payroll_number"])
+        employee = request.user
         try:
             move_surplus(part=form.cleaned_data["part"], action=form.cleaned_data["action"],
                          quantity=form.cleaned_data["quantity"], employee=employee,
@@ -299,7 +379,7 @@ def process_material(request):
         selected_part = form.fields["part"].queryset.filter(pk=request.POST["part"]).first()
     if request.method == "POST" and form.is_valid():
         selected_part = form.cleaned_data["part"]
-        employee = Employee.objects.get(payroll_number=form.cleaned_data["payroll_number"])
+        employee = request.user
         try:
             move_process_material(
                 part=selected_part, source_process=form.cleaned_data["source_process"],
@@ -348,7 +428,7 @@ def heliang(request):
         selected_order = ProductionOrder.objects.filter(
             pk=request.GET["order"], status=ProductionOrder.Status.OPEN
         ).first()
-    start_initial = ({"order": selected_order, "quantity": selected_order.remaining_quantity}
+    start_initial = ({"order": selected_order, "quantity": _quantity_text(selected_order.remaining_quantity)}
                      if selected_order else None)
     start_form = StartProductionForm(
         request.POST if action == "start" else None,
@@ -359,14 +439,14 @@ def heliang(request):
         selected_work = WorkInProcess.objects.filter(
             pk=request.GET["work"], status=WorkInProcess.Status.ACTIVE
         ).select_related("order__part", "machine").first()
-    close_initial = ({"work_item": selected_work, "quantity": selected_work.remaining_quantity}
+    close_initial = ({"work_item": selected_work, "quantity": _quantity_text(selected_work.remaining_quantity)}
                      if selected_work else None)
     close_form = CloseProductionForm(
         request.POST if action == "close" else None,
         prefix="close", initial=close_initial,
     )
     if request.method == "POST" and action == "start" and start_form.is_valid():
-        employee = Employee.objects.get(payroll_number=start_form.cleaned_data["payroll_number"])
+        employee = request.user
         try:
             work = start_production(
                 order=start_form.cleaned_data["order"], machine=start_form.cleaned_data["machine"],
@@ -377,7 +457,7 @@ def heliang(request):
             messages.success(request, f"Orden {work.order.folio} asignada a {work.machine.code} con folio {work.folio}.")
             return redirect("heliang")
     if request.method == "POST" and action == "close" and close_form.is_valid():
-        employee = Employee.objects.get(payroll_number=close_form.cleaned_data["payroll_number"])
+        employee = request.user
         try:
             close = close_production(
                 work_item=close_form.cleaned_data["work_item"],
@@ -400,14 +480,23 @@ def heliang(request):
                     for machine in machines]
     return render(request, "operations/heliang.html", {
         "start_form": start_form, "close_form": close_form, "open_orders": open_orders,
+        "order_balances": {str(order.pk): str(order.remaining_quantity) for order in open_orders},
         "active_items": active_items, "recent_closes": recent_closes,
         "machine_rows": machine_rows, "selected_order": selected_order,
         "selected_work": selected_work})
 
 
+def _quantity_text(value):
+    return format(value, "f").rstrip("0").rstrip(".")
+
+
 @login_required
 @module_required("line_dashboard")
 def line_dashboard(request):
+    return render(request, "operations/line_dashboard.html", _line_dashboard_context())
+
+
+def _line_dashboard_context():
     now = timezone.localtime()
     today = now.date()
     active_items = list(WorkInProcess.objects.filter(
@@ -431,7 +520,40 @@ def line_dashboard(request):
     recent_closes = ProductionClose.objects.filter(closed_at__date=today).select_related(
         "work_item__order__part", "work_item__machine").order_by("-closed_at")[:8]
     total_machines = len(machine_rows)
-    return render(request, "operations/line_dashboard.html", {
+    first_day = today - timedelta(days=6)
+    daily_values = {
+        row["day"]: row["total"] or 0
+        for row in ProductionClose.objects.filter(closed_at__date__gte=first_day)
+        .annotate(day=TruncDate("closed_at", tzinfo=timezone.get_current_timezone()))
+        .values("day").annotate(total=Sum("quantity"))
+    }
+    day_names = ("Lun", "Mar", "Mié", "Jue", "Vie", "Sáb", "Dom")
+    daily_production = [
+        {"label": day_names[(first_day + timedelta(days=index)).weekday()],
+         "date": first_day + timedelta(days=index),
+         "total": daily_values.get(first_day + timedelta(days=index), 0)}
+        for index in range(7)
+    ]
+    daily_max = max((row["total"] for row in daily_production), default=0) or 1
+    for row in daily_production:
+        row["height"] = round(float(row["total"] / daily_max * 100))
+    machine_output = list(today_closes.values(
+        "work_item__machine__code").annotate(total=Sum("quantity")).order_by("-total")[:8])
+    machine_max = max((row["total"] for row in machine_output), default=0) or 1
+    for row in machine_output:
+        row["percent"] = round(float(row["total"] / machine_max * 100))
+    utilization = round(len(active_items) / total_machines * 100) if total_machines else 0
+    order_counts = dict(ProductionOrder.objects.values_list("status").annotate(total=Count("id")))
+    order_total = sum(order_counts.values()) or 1
+    order_distribution = [
+        {"label": "Abiertas", "value": order_counts.get(ProductionOrder.Status.OPEN, 0), "class": "open",
+         "percent": round(order_counts.get(ProductionOrder.Status.OPEN, 0) / order_total * 100)},
+        {"label": "Completadas", "value": order_counts.get(ProductionOrder.Status.COMPLETE, 0), "class": "complete",
+         "percent": round(order_counts.get(ProductionOrder.Status.COMPLETE, 0) / order_total * 100)},
+        {"label": "Canceladas", "value": order_counts.get(ProductionOrder.Status.CANCELLED, 0), "class": "cancelled",
+         "percent": round(order_counts.get(ProductionOrder.Status.CANCELLED, 0) / order_total * 100)},
+    ]
+    return {
         "now": now, "machine_rows": machine_rows, "active_count": len(active_items),
         "available_count": total_machines - len(active_items), "total_machines": total_machines,
         "open_count": ProductionOrder.objects.filter(status=ProductionOrder.Status.OPEN).count(),
@@ -440,12 +562,31 @@ def line_dashboard(request):
         "today_weight": today_summary["weight"] or 0,
         "process_totals": process_totals, "open_orders": open_orders,
         "recent_closes": recent_closes,
+        "daily_production": daily_production, "machine_output": machine_output,
+        "utilization": utilization, "utilization_degrees": utilization * 3.6,
+        "order_distribution": order_distribution,
+    }
+
+
+@login_required
+@module_required("line_dashboard")
+def line_dashboard_data(request):
+    context = _line_dashboard_context()
+    return JsonResponse({
+        "html": render_to_string("operations/line_dashboard.html", context, request=request),
+        "updated_at": context["now"].isoformat(),
     })
 
 
 @login_required
 @module_required("line_dashboard")
 def progress_dashboard(request):
+    return render(request, "operations/progress_dashboard.html", {
+        "progress_data": _progress_dashboard_data(),
+    })
+
+
+def _progress_dashboard_data():
     orders = ProductionOrder.objects.exclude(
         status=ProductionOrder.Status.CANCELLED
     ).select_related("part", "part__client").annotate(
@@ -463,8 +604,15 @@ def progress_dashboard(request):
             "programmed": float(order.quantity),
             "completed": float(completed),
         })
-    return render(request, "operations/progress_dashboard.html", {
-        "progress_data": progress_data,
+    return progress_data
+
+
+@login_required
+@module_required("line_dashboard")
+def progress_dashboard_data(request):
+    return JsonResponse({
+        "progress_data": _progress_dashboard_data(),
+        "updated_at": timezone.now().isoformat(),
     })
 
 
@@ -473,7 +621,7 @@ def progress_dashboard(request):
 def start_work(request):
     form = StartProductionForm(request.POST or None)
     if request.method == "POST" and form.is_valid():
-        employee = Employee.objects.get(payroll_number=form.cleaned_data["payroll_number"])
+        employee = request.user
         try:
             work = start_production(order=form.cleaned_data["order"], machine=form.cleaned_data["machine"],
                 quantity=form.cleaned_data["quantity"], employee=employee, user=request.user)
@@ -490,7 +638,7 @@ def start_work(request):
 def close_work(request):
     form = CloseProductionForm(request.POST or None)
     if request.method == "POST" and form.is_valid():
-        employee = Employee.objects.get(payroll_number=form.cleaned_data["payroll_number"])
+        employee = request.user
         try:
             close = close_production(work_item=form.cleaned_data["work_item"], quantity=form.cleaned_data["quantity"],
                 employee=employee, user=request.user, comment=form.cleaned_data["comment"])
@@ -514,20 +662,50 @@ def inventory_list(request):
 @login_required
 @module_required("reports")
 def report(request):
-    rows = ProductionClose.objects.select_related("work_item__order__part", "work_item__machine", "closed_by")
-    start, end = request.GET.get("start"), request.GET.get("end")
-    if start: rows = rows.filter(closed_at__date__gte=start)
-    if end: rows = rows.filter(closed_at__date__lte=end)
-    return render(request, "operations/report.html", {"rows": rows[:1000], "start": start, "end": end})
+    rows, filters = _filtered_report_rows(request)
+    machines = Machine.objects.filter(work_items__closes__isnull=False).distinct().order_by("code")
+    shifts = ProductionClose.objects.exclude(shift="").values_list("shift", flat=True).distinct().order_by("shift")
+    return render(request, "operations/report.html", {
+        "rows": rows[:1000], "machines": machines, "shifts": shifts,
+        "query_string": request.GET.urlencode(), **filters,
+    })
+
+
+def _filtered_report_rows(request):
+    rows = ProductionClose.objects.select_related(
+        "work_item__order__part", "work_item__machine", "closed_by")
+    query = request.GET.get("q", "").strip()
+    machine = request.GET.get("machine", "").strip()
+    shift = request.GET.get("shift", "").strip()
+    start = _valid_date(request.GET.get("start"))
+    end = _valid_date(request.GET.get("end"))
+    if query:
+        rows = rows.filter(
+            Q(folio__icontains=query) | Q(work_item__order__folio__icontains=query) |
+            Q(work_item__order__program__icontains=query) |
+            Q(work_item__order__part__number__icontains=query) |
+            Q(work_item__machine__code__icontains=query) |
+            Q(closed_by__username__icontains=query) | Q(closed_by__first_name__icontains=query) |
+            Q(closed_by__last_name__icontains=query)
+        )
+    if machine:
+        rows = rows.filter(work_item__machine__code=machine)
+    if shift:
+        rows = rows.filter(shift=shift)
+    if start:
+        rows = rows.filter(closed_at__date__gte=start)
+    if end:
+        rows = rows.filter(closed_at__date__lte=end)
+    return rows.order_by("-closed_at"), {
+        "query": query, "machine": machine, "shift": shift,
+        "start": start.isoformat() if start else "", "end": end.isoformat() if end else "",
+    }
 
 
 @login_required
 @module_required("reports")
 def report_csv(request):
-    rows = ProductionClose.objects.select_related("work_item__order__part", "work_item__machine", "closed_by")
-    start, end = request.GET.get("start"), request.GET.get("end")
-    if start: rows = rows.filter(closed_at__date__gte=start)
-    if end: rows = rows.filter(closed_at__date__lte=end)
+    rows, _ = _filtered_report_rows(request)
     response = HttpResponse(content_type="text/csv; charset=utf-8")
     response["Content-Disposition"] = 'attachment; filename="reporte_produccion.csv"'
     response.write("\ufeff")

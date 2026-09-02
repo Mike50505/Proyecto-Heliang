@@ -1,0 +1,15 @@
+{% extends 'base.html' %}
+{% block content %}
+<section class="form-card">
+  <span class="eyebrow">ELIMINAR ORDEN</span>
+  <h1>{{ order.folio }}</h1>
+  <p><b>{{ order.program }}</b> · {{ order.part.number }} · {{ order.quantity|floatformat:"-3" }} piezas</p>
+  {% if blocked %}
+    <div class="delete-warning">Esta orden tiene producción o material asociado y no puede eliminarse. El historial operativo debe conservarse.</div>
+    <div class="form-actions"><a class="button secondary" href="{% url 'order-list' %}">Volver</a></div>
+  {% else %}
+    <div class="delete-warning">Esta acción eliminará definitivamente la orden y su movimiento inicial.</div>
+    <form method="post">{% csrf_token %}<div class="form-actions"><a class="button secondary" href="{% url 'order-list' %}">Cancelar</a><button class="danger" type="submit">Confirmar eliminación</button></div></form>
+  {% endif %}
+</section>
+{% endblock %}

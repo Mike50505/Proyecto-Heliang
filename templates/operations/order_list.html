@@ -4,13 +4,25 @@
   <div><h1>Programas y órdenes</h1><p>Órdenes cargadas y saldo disponible.</p></div>
   <div><a class="button secondary" href="{% url 'download-completed-programs' %}">Descargar completados</a> <a class="button secondary" href="{% url 'bulk-load-program' %}">Carga masiva</a> <a class="button" href="{% url 'load-program' %}">Nuevo programa</a></div>
 </div>
+<form class="filters panel" method="get">
+  <label class="grow">Buscar
+    <input type="search" name="q" value="{{ query }}" placeholder="Folio, programa, cliente o número de parte">
+  </label>
+  <label>Estado
+    <select name="status"><option value="">Todos</option>{% for value, label in status_choices %}<option value="{{ value }}" {% if status == value %}selected{% endif %}>{{ label }}</option>{% endfor %}</select>
+  </label>
+  <label>Requerida desde <input type="date" name="start" value="{{ start }}"></label>
+  <label>Requerida hasta <input type="date" name="end" value="{{ end }}"></label>
+  <button type="submit">Filtrar</button>
+  <a class="button secondary" href="{% url 'order-list' %}">Limpiar</a>
+</form>
 <div class="panel table-wrap">
   <table>
-    <thead><tr><th>Folio</th><th>Semana / orden de producción</th><th>Cliente</th><th>Parte</th><th>Cantidad</th><th>Restante</th><th>Requerida</th><th>Estado</th></tr></thead>
+    <thead><tr><th>Folio</th><th>Semana / orden de producción</th><th>Cliente</th><th>Parte</th><th>Cantidad</th><th>Restante</th><th>Requerida</th><th>Estado</th><th>Acciones</th></tr></thead>
     <tbody>
       {% for row in orders %}
-        <tr><td>{{ row.folio }}</td><td>{{ row.program }}</td><td>{{ row.part.client.name|default:'—' }}</td><td>{{ row.part.number }}</td><td>{{ row.quantity }}</td><td>{{ row.remaining_quantity }}</td><td>{{ row.required_date|default:'—' }}</td><td><span class="status {{ row.status|lower }}">{{ row.get_status_display }}</span></td></tr>
-      {% empty %}<tr><td colspan="8">No hay órdenes.</td></tr>{% endfor %}
+        <tr><td>{{ row.folio }}</td><td>{{ row.program }}</td><td>{{ row.part.client.name|default:'—' }}</td><td>{{ row.part.number }}</td><td>{{ row.quantity|floatformat:"-3" }}</td><td>{{ row.remaining_quantity|floatformat:"-3" }}</td><td>{{ row.required_date|default:'—' }}</td><td><span class="status {{ row.status|lower }}">{{ row.get_status_display }}</span></td><td><div class="row-actions"><a class="button compact secondary" href="{% url 'edit-order' row.pk %}">Editar</a><a class="button compact danger" href="{% url 'delete-order' row.pk %}">Eliminar</a></div></td></tr>
+      {% empty %}<tr><td colspan="9">No hay órdenes.</td></tr>{% endfor %}
     </tbody>
   </table>
 </div>

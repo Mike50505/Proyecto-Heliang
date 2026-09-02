@@ -1,15 +1,16 @@
 import pytest
 from decimal import Decimal
+from django.contrib.auth import get_user_model
 from django.core.exceptions import ValidationError
 from django.utils import timezone
-from operations.models import Client, Employee, Machine, Part, ProductionOrder, WorkInProcess
+from operations.models import Client, Machine, Part, ProductionOrder, WorkInProcess
 from operations.services import close_production, start_production
 
 @pytest.fixture
 def data(db):
     client = Client.objects.create(code="TEST", name="Cliente")
     part = Part.objects.create(number="P-1", client=client, unit_weight_kg=Decimal("0.250"))
-    employee = Employee.objects.create(payroll_number="100", name="Operador")
+    employee = get_user_model().objects.create_user("operator")
     machine = Machine.objects.create(code="M-1")
     order = ProductionOrder.objects.create(folio="O01012026-1", program="S1", part=part,
         quantity=100, remaining_quantity=100)

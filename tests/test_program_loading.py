@@ -7,7 +7,7 @@ from django.test import TestCase
 from django.urls import reverse
 from django.utils import timezone
 from openpyxl import Workbook, load_workbook
-from operations.models import (Client, Employee, Inventory, InventoryBucket, Machine, Movement,
+from operations.models import (Client, Inventory, InventoryBucket, Machine, Movement,
                                Part, Process, ProductionClose, ProductionOrder, WorkInProcess)
 from operations.services import (create_program_order, move_process_material, move_surplus,
                                  resolve_program_client)
@@ -16,7 +16,7 @@ from operations.services import (create_program_order, move_process_material, mo
 class ProgramLoadingTests(TestCase):
     def setUp(self):
         self.user = get_user_model().objects.create_user("tester", password="test")
-        self.employee = Employee.objects.create(payroll_number="100", name="Operador")
+        self.employee = self.user
 
     def test_individual_load_creates_order_and_traceability(self):
         order = create_program_order(client_name="Cliente Uno", part_number="P-100",
@@ -102,7 +102,6 @@ class ProgramLoadingTests(TestCase):
         )
 
         response = self.client.post(reverse("bulk-load-program"), {
-            "payroll_number": self.employee.payroll_number,
             "file": upload,
         })
 
@@ -119,6 +118,70 @@ class ProgramLoadingTests(TestCase):
         resolved = resolve_program_client(client_reference="#N/A", part_number="82-TEST")
 
         self.assertEqual(resolved, expected_client)
+
+    def test_program_table_filters_by_search_and_status(self):
+        self.user.is_superuser = True
+        self.user.save(update_fields=["is_superuser"])
+        self.client.force_login(self.user)
+        part = Part.objects.create(number="FILTER-PART")
+        ProductionOrder.objects.create(
+            folio="FILTER-OPEN", program="S40", part=part,
+            quantity=10, remaining_quantity=10,
+        )
+        ProductionOrder.objects.create(
+            folio="FILTER-DONE", program="S41", part=part,
+            quantity=10, remaining_quantity=0, status=ProductionOrder.Status.COMPLETE,
+        )
+
+        response = self.client.get(reverse("order-list"), {"q": "FILTER", "status": "OPEN"})
+
+        self.assertContains(response, "FILTER-OPEN")
+        self.assertNotContains(response, "FILTER-DONE")
+
+    def test_order_can_be_edited_and_recalculates_available_balance(self):
+        self.user.is_superuser = True
+        self.user.save(update_fields=["is_superuser"])
+        self.client.force_login(self.user)
+        part = Part.objects.create(number="EDIT-PART")
+        order = ProductionOrder.objects.create(
+            folio="EDIT-1", program="S40", part=part,
+            quantity=100, remaining_quantity=60,
+        )
+
+        response = self.client.post(reverse("edit-order", args=[order.pk]), {
+            "program": "S41", "part": part.pk, "quantity": 120,
+            "required_date": "", "line": "L2",
+        })
+
+        self.assertRedirects(response, reverse("order-list"))
+        order.refresh_from_db()
+        self.assertEqual(order.program, "S41")
+        self.assertEqual(order.remaining_quantity, Decimal("80"))
+
+    def test_order_deletion_is_confirmed_and_blocked_with_production(self):
+        self.user.is_superuser = True
+        self.user.save(update_fields=["is_superuser"])
+        self.client.force_login(self.user)
+        part = Part.objects.create(number="DELETE-PART")
+        removable = ProductionOrder.objects.create(
+            folio="DELETE-1", program="S42", part=part,
+            quantity=10, remaining_quantity=10,
+        )
+        response = self.client.post(reverse("delete-order", args=[removable.pk]))
+        self.assertRedirects(response, reverse("order-list"))
+        self.assertFalse(ProductionOrder.objects.filter(pk=removable.pk).exists())
+
+        protected = ProductionOrder.objects.create(
+            folio="DELETE-2", program="S43", part=part,
+            quantity=10, remaining_quantity=0,
+        )
+        machine = Machine.objects.create(code="DELETE-MACHINE")
+        WorkInProcess.objects.create(
+            folio="DELETE-WORK", order=protected, machine=machine,
+            initial_quantity=10, remaining_quantity=10, started_at=timezone.now(),
+        )
+        self.client.post(reverse("delete-order", args=[protected.pk]))
+        self.assertTrue(ProductionOrder.objects.filter(pk=protected.pk).exists())
 
     def test_surplus_allocation_updates_both_balances(self):
         part = Part.objects.create(number="P-200")

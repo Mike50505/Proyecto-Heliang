@@ -1,5 +1,6 @@
+from decimal import Decimal
 from django import forms
-from .models import Employee, Machine, Part, Process, ProductionOrder, WorkInProcess
+from .models import Machine, Part, Process, ProductionOrder, WorkInProcess
 
 
 class OrderChoiceField(forms.ModelChoiceField):
@@ -14,7 +15,6 @@ class WorkChoiceField(forms.ModelChoiceField):
 
 
 class ProgramOrderForm(forms.Form):
-    payroll_number = forms.CharField(label="N.º de nómina")
     client = forms.CharField(label="Cliente", max_length=120)
     part_number = forms.CharField(label="N.º de parte", max_length=80)
     program = forms.CharField(label="Programa / orden del cliente", max_length=80)
@@ -25,23 +25,44 @@ class ProgramOrderForm(forms.Form):
     comment = forms.CharField(label="Comentarios", required=False,
                               widget=forms.Textarea(attrs={"rows": 2}))
 
-    def clean_payroll_number(self):
-        value = self.cleaned_data["payroll_number"].strip()
-        if not Employee.objects.filter(payroll_number=value, active=True).exists():
-            raise forms.ValidationError("La nómina no está registrada o está inactiva.")
-        return value
 
+class ProductionOrderEditForm(forms.ModelForm):
+    class Meta:
+        model = ProductionOrder
+        fields = ("program", "part", "quantity", "required_date", "line")
+        widgets = {"required_date": forms.DateInput(attrs={"type": "date"})}
+        labels = {
+            "program": "Semana / orden de producción", "part": "Número de parte",
+            "quantity": "Cantidad total", "required_date": "Fecha requerida",
+            "line": "Línea del cliente",
+        }
+
+    def __init__(self, *args, **kwargs):
+        instance = kwargs.get("instance")
+        self.committed_quantity = (instance.quantity - instance.remaining_quantity
+                                   if instance and instance.pk else Decimal("0"))
+        super().__init__(*args, **kwargs)
+
+    def clean_quantity(self):
+        quantity = self.cleaned_data["quantity"]
+        if quantity < self.committed_quantity:
+            raise forms.ValidationError(
+                f"La cantidad no puede ser menor que {self.committed_quantity:g}; esa cantidad ya fue asignada.")
+        return quantity
+
+    def save(self, commit=True):
+        order = super().save(commit=False)
+        order.remaining_quantity = order.quantity - self.committed_quantity
+        if order.status != ProductionOrder.Status.CANCELLED:
+            order.status = (ProductionOrder.Status.COMPLETE if order.remaining_quantity == 0
+                            else ProductionOrder.Status.OPEN)
+        if commit:
+            order.save()
+        return order
 
 class BulkProgramForm(forms.Form):
-    payroll_number = forms.CharField(label="N.º de nómina")
     file = forms.FileField(label="Archivo Excel (.xlsx)",
                            widget=forms.ClearableFileInput(attrs={"accept": ".xlsx"}))
-
-    def clean_payroll_number(self):
-        value = self.cleaned_data["payroll_number"].strip()
-        if not Employee.objects.filter(payroll_number=value, active=True).exists():
-            raise forms.ValidationError("La nómina no está registrada o está inactiva.")
-        return value
 
     def clean_file(self):
         value = self.cleaned_data["file"]
@@ -55,7 +76,6 @@ class BulkProgramForm(forms.Form):
 class SurplusMovementForm(forms.Form):
     RECEIVE = "RECEIVE"
     ALLOCATE = "ALLOCATE"
-    payroll_number = forms.CharField(label="N.º de nómina")
     action = forms.ChoiceField(label="Movimiento", choices=[
         (RECEIVE, "Recibir material sobrante"),
         (ALLOCATE, "Cargar sobrante a programa"),
@@ -70,12 +90,6 @@ class SurplusMovementForm(forms.Form):
         super().__init__(*args, **kwargs)
         self.fields["part"].queryset = Part.objects.order_by("number")
 
-    def clean_payroll_number(self):
-        value = self.cleaned_data["payroll_number"].strip()
-        if not Employee.objects.filter(payroll_number=value, active=True).exists():
-            raise forms.ValidationError("La nómina no está registrada o está inactiva.")
-        return value
-
     def clean(self):
         data = super().clean()
         if data.get("action") == self.ALLOCATE and not data.get("program", "").strip():
@@ -84,7 +98,6 @@ class SurplusMovementForm(forms.Form):
 
 
 class ProcessMovementForm(forms.Form):
-    payroll_number = forms.CharField(label="N.º de nómina")
     part = forms.ModelChoiceField(label="N.º de parte", queryset=Part.objects.none())
     source_process = forms.ModelChoiceField(label="Proceso que envía", queryset=Process.objects.none())
     destination_process = forms.ModelChoiceField(label="Proceso que recibe", queryset=Process.objects.none())
@@ -100,12 +113,6 @@ class ProcessMovementForm(forms.Form):
         self.fields["source_process"].queryset = processes
         self.fields["destination_process"].queryset = processes
 
-    def clean_payroll_number(self):
-        value = self.cleaned_data["payroll_number"].strip()
-        if not Employee.objects.filter(payroll_number=value, active=True).exists():
-            raise forms.ValidationError("La nómina no está registrada o está inactiva.")
-        return value
-
     def clean(self):
         data = super().clean()
         if data.get("source_process") == data.get("destination_process"):
@@ -116,30 +123,18 @@ class ProcessMovementForm(forms.Form):
 class StartProductionForm(forms.Form):
     order = OrderChoiceField(label="Orden abierta", queryset=ProductionOrder.objects.none())
     machine = forms.ModelChoiceField(label="Máquina disponible", queryset=Machine.objects.none())
-    payroll_number = forms.CharField(label="Nómina")
     quantity = forms.DecimalField(label="Cantidad", min_value=0.001, decimal_places=3)
     def __init__(self, *args, **kwargs):
         super().__init__(*args, **kwargs)
         self.fields["order"].queryset = ProductionOrder.objects.filter(status=ProductionOrder.Status.OPEN).select_related("part")
         occupied = WorkInProcess.objects.filter(status=WorkInProcess.Status.ACTIVE).values("machine_id")
         self.fields["machine"].queryset = Machine.objects.filter(active=True).exclude(pk__in=occupied)
-    def clean_payroll_number(self):
-        value = self.cleaned_data["payroll_number"].strip()
-        if not Employee.objects.filter(payroll_number=value, active=True).exists():
-            raise forms.ValidationError("La nómina no está registrada o está inactiva.")
-        return value
 
 
 class CloseProductionForm(forms.Form):
     work_item = WorkChoiceField(label="Orden procesando", queryset=WorkInProcess.objects.none())
-    payroll_number = forms.CharField(label="Nómina")
     quantity = forms.DecimalField(label="Cantidad terminada", min_value=0.001, decimal_places=3)
     comment = forms.CharField(label="Comentario", widget=forms.Textarea(attrs={"rows": 3}), required=False)
     def __init__(self, *args, **kwargs):
         super().__init__(*args, **kwargs)
         self.fields["work_item"].queryset = WorkInProcess.objects.filter(status=WorkInProcess.Status.ACTIVE).select_related("order", "machine")
-    def clean_payroll_number(self):
-        value = self.cleaned_data["payroll_number"].strip()
-        if not Employee.objects.filter(payroll_number=value, active=True).exists():
-            raise forms.ValidationError("La nómina no está registrada o está inactiva.")
-        return value

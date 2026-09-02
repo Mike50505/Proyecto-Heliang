@@ -1,5 +1,13 @@
 {% extends 'base.html' %}{% block content %}<div class="title-row"><div><h1>Reporte de producción</h1><p>Cierres totales y parciales.</p></div></div>
-<form class="filters"><label>Desde <input type="date" name="start" value="{{ start }}"></label><label>Hasta <input type="date" name="end" value="{{ end }}"></label><button>Filtrar</button>
-<a class="button secondary" href="{% url 'report-csv' %}?start={{ start|default:'' }}&end={{ end|default:'' }}">Exportar CSV</a></form>
+<form class="filters panel" method="get">
+  <label class="grow">Buscar <input type="search" name="q" value="{{ query }}" placeholder="Folio, orden, programa, parte u operador"></label>
+  <label>Máquina <select name="machine"><option value="">Todas</option>{% for item in machines %}<option value="{{ item.code }}" {% if machine == item.code %}selected{% endif %}>{{ item.code }}</option>{% endfor %}</select></label>
+  <label>Turno <select name="shift"><option value="">Todos</option>{% for item in shifts %}<option value="{{ item }}" {% if shift == item %}selected{% endif %}>{{ item }}</option>{% endfor %}</select></label>
+  <label>Desde <input type="date" name="start" value="{{ start }}"></label>
+  <label>Hasta <input type="date" name="end" value="{{ end }}"></label>
+  <button type="submit">Filtrar</button>
+  <a class="button secondary" href="{% url 'report' %}">Limpiar</a>
+  <a class="button secondary" href="{% url 'report-csv' %}{% if query_string %}?{{ query_string }}{% endif %}">Exportar CSV</a>
+</form>
 <div class="panel table-wrap"><table><thead><tr><th>Folio</th><th>Orden</th><th>Programa</th><th>Parte</th><th>Cantidad</th><th>Máquina</th><th>Cierre</th><th>Turno</th><th>Kg</th><th>Operador</th></tr></thead><tbody>
-{% for row in rows %}<tr><td>{{ row.folio }}</td><td>{{ row.work_item.order.folio }}</td><td>{{ row.work_item.order.program }}</td><td>{{ row.work_item.order.part.number }}</td><td>{{ row.quantity }}</td><td>{{ row.work_item.machine.code }}</td><td>{{ row.closed_at|date:'d/m/Y H:i' }}</td><td>{{ row.shift }}</td><td>{{ row.weight_kg }}</td><td>{{ row.closed_by.name|default:'—' }}</td></tr>{% empty %}<tr><td colspan="10">No hay resultados.</td></tr>{% endfor %}</tbody></table></div>{% endblock %}
+{% for row in rows %}<tr><td>{{ row.folio }}</td><td>{{ row.work_item.order.folio }}</td><td>{{ row.work_item.order.program }}</td><td>{{ row.work_item.order.part.number }}</td><td>{{ row.quantity|floatformat:"-3" }}</td><td>{{ row.work_item.machine.code }}</td><td>{{ row.closed_at|date:'d/m/Y H:i' }}</td><td>{{ row.shift }}</td><td>{{ row.weight_kg|floatformat:2 }}</td><td>{% if row.closed_by %}{{ row.closed_by.get_full_name|default:row.closed_by.username }}{% else %}—{% endif %}</td></tr>{% empty %}<tr><td colspan="10">No hay resultados.</td></tr>{% endfor %}</tbody></table></div>{% endblock %}

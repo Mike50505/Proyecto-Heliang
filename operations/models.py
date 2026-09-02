@@ -11,16 +11,6 @@ class TimeStamped(models.Model):
         abstract = True
 
 
-class Employee(TimeStamped):
-    payroll_number = models.CharField("nómina", max_length=30, unique=True)
-    name = models.CharField("nombre", max_length=180)
-    area = models.CharField(max_length=100, blank=True)
-    identifier = models.CharField("identificador", max_length=30, blank=True)
-    user = models.OneToOneField(settings.AUTH_USER_MODEL, null=True, blank=True, on_delete=models.SET_NULL)
-    active = models.BooleanField(default=True)
-    def __str__(self): return f"{self.payroll_number} - {self.name}"
-
-
 class Client(TimeStamped):
     code = models.CharField(max_length=30, unique=True)
     name = models.CharField(max_length=120)
@@ -82,7 +72,7 @@ class ProductionOrder(TimeStamped):
     required_date = models.DateField(null=True, blank=True)
     line = models.CharField(max_length=80, blank=True)
     status = models.CharField(max_length=12, choices=Status.choices, default=Status.OPEN)
-    loaded_by = models.ForeignKey(Employee, null=True, blank=True, on_delete=models.SET_NULL)
+    loaded_by = models.ForeignKey(settings.AUTH_USER_MODEL, null=True, blank=True, on_delete=models.SET_NULL)
     legacy_id = models.CharField(max_length=80, blank=True, db_index=True)
     def __str__(self): return self.folio
 
@@ -98,7 +88,7 @@ class WorkInProcess(TimeStamped):
     remaining_quantity = models.DecimalField(max_digits=14, decimal_places=3)
     status = models.CharField(max_length=12, choices=Status.choices, default=Status.ACTIVE)
     started_at = models.DateTimeField()
-    started_by = models.ForeignKey(Employee, null=True, on_delete=models.SET_NULL, related_name="started_work")
+    started_by = models.ForeignKey(settings.AUTH_USER_MODEL, null=True, on_delete=models.SET_NULL, related_name="started_work")
     legacy_id = models.CharField(max_length=80, blank=True, db_index=True)
 
 
@@ -110,7 +100,7 @@ class ProductionClose(TimeStamped):
     closed_at = models.DateTimeField()
     shift = models.CharField(max_length=30, blank=True)
     comment = models.TextField(blank=True)
-    closed_by = models.ForeignKey(Employee, null=True, on_delete=models.SET_NULL, related_name="production_closes")
+    closed_by = models.ForeignKey(settings.AUTH_USER_MODEL, null=True, on_delete=models.SET_NULL, related_name="production_closes")
     legacy_id = models.CharField(max_length=80, blank=True, db_index=True)
 
 
@@ -128,7 +118,7 @@ class Movement(TimeStamped):
     program = models.CharField(max_length=100, blank=True)
     quantity = models.DecimalField(max_digits=14, decimal_places=3)
     occurred_at = models.DateTimeField()
-    employee = models.ForeignKey(Employee, null=True, blank=True, on_delete=models.SET_NULL)
+    employee = models.ForeignKey(settings.AUTH_USER_MODEL, null=True, blank=True, on_delete=models.SET_NULL)
     comment = models.TextField(blank=True)
     legacy_source = models.CharField(max_length=80, blank=True)
 
@@ -146,6 +136,8 @@ class AuditEvent(models.Model):
 class ModuleAccess(models.Model):
     user = models.OneToOneField(settings.AUTH_USER_MODEL, on_delete=models.CASCADE,
                                 related_name="module_access", verbose_name="usuario")
+    payroll_number = models.CharField("número de nómina", max_length=30, unique=True,
+                                      null=True, blank=True)
     program_loading = models.BooleanField("cargar programas", default=False)
     heliang = models.BooleanField("Heliang · máquinas automáticas", default=False)
     inventory = models.BooleanField("consultar inventario", default=False)

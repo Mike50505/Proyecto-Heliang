@@ -4,10 +4,11 @@
 {% block content %}
 <link rel="stylesheet" href="{% static 'css/progress_dashboard.css' %}">
 <link rel="stylesheet" href="{% static 'css/progress_screen.css' %}">
+<link rel="stylesheet" href="{% static 'css/progress_chart_styles.css' %}">
 <div id="progress-screen" class="progress-screen">
 <div class="progress-head">
-  <div><span class="eyebrow">ANÁLISIS INTERACTIVO</span><h1>Avance de producción</h1><p>Selecciona una semana o cliente para cruzar todas las visualizaciones.</p></div>
-  <div class="filter-actions"><div id="active-filters" class="active-filters">Todos los datos</div><button id="clear-filters" class="button secondary" type="button">Limpiar filtros</button><button id="screen-mode" class="button screen-mode" type="button"><span>⛶</span> Modo pantalla</button></div>
+  <div><span class="eyebrow">ANÁLISIS INTERACTIVO</span><h1>Avance de producción</h1><p>Selecciona una semana o cliente para cruzar todas las visualizaciones. <span id="progress-refresh-status">Actualización automática cada 30 segundos</span></p></div>
+  <div class="filter-actions"><div id="active-filters" class="active-filters">Todos los datos</div><label class="chart-style-control">Tipo de gráfica<select id="chart-style"><option value="horizontal">Barras horizontales</option><option value="classic">Barras clásicas</option><option value="donut">Gráficas circulares</option></select></label><button id="clear-filters" class="button secondary" type="button">Limpiar filtros</button><button id="screen-mode" class="button screen-mode" type="button"><span>⛶</span> Modo pantalla</button></div>
 </div>
 
 <section class="progress-kpis">
@@ -26,11 +27,13 @@
 
   <article class="chart-card week-card">
     <div class="chart-title"><div><span>DESGLOSE</span><h2>Avance por semana</h2></div><small>Haz clic para filtrar</small></div>
+    <div class="chart-explanation" data-chart-legend></div>
     <div id="week-chart" class="bar-chart"></div>
   </article>
 
   <article class="chart-card client-card">
     <div class="chart-title"><div><span>DESGLOSE</span><h2>Avance por cliente</h2></div><small>Haz clic para filtrar</small></div>
+    <div class="chart-explanation client-legend" data-chart-legend></div>
     <div id="client-chart" class="bar-chart client-chart"></div>
   </article>
 </section>
@@ -42,5 +45,6 @@
 
 </div>
 {{ progress_data|json_script:"progress-data" }}
+<script>window.progressDataUrl = "{% url 'progress-dashboard-data' %}";</script>
 <script src="{% static 'js/progress_dashboard.js' %}"></script>
 {% endblock %}

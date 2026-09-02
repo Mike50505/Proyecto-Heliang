@@ -1,9 +1,11 @@
 {% load static %}<!doctype html>
-<html lang="es"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
-<title>{% block title %}MESA Producción{% endblock %}</title><link rel="stylesheet" href="{% static 'css/app.css' %}"><link rel="stylesheet" href="{% static 'css/process.css' %}"></head>
+<html lang="es"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><script>document.documentElement.dataset.theme=localStorage.getItem('mesa-theme')||(matchMedia('(prefers-color-scheme: dark)').matches?'dark':'light');</script>
+<title>{% block title %}MESA Producción{% endblock %}</title><link rel="stylesheet" href="{% static 'css/app.css' %}"><link rel="stylesheet" href="{% static 'css/process.css' %}"><link rel="stylesheet" href="{% static 'css/filters.css' %}"><link rel="stylesheet" href="{% static 'css/theme.css' %}"></head>
 <body><header><a class="brand" href="{% url 'dashboard' %}"><span class="brand-mark">M</span><span class="brand-copy"><b>MESA</b><small>Control de producción</small></span></a>
 {% if user.is_authenticated %}<nav>{% if module_access.program_loading %}<a class="nav-priority" href="{% url 'load-program' %}">Cargar programa</a>{% endif %}{% if module_access.heliang %}<a class="nav-priority" href="{% url 'heliang' %}">Heliang</a>{% endif %}{% if module_access.inventory %}<a href="{% url 'inventory-list' %}">Inventario</a>{% endif %}{% if module_access.surplus %}<a href="{% url 'surplus' %}">Sobrante</a>{% endif %}
-{% if module_access.process_material %}<a href="{% url 'process-material' %}">Material en proceso</a>{% endif %}{% if module_access.reports %}<a href="{% url 'report' %}">Reportes</a>{% endif %}{% if module_access.line_dashboard %}<a href="{% url 'line-dashboard' %}">Tablero de línea</a>{% endif %}{% if user.is_staff %}<a href="/admin/">Administración</a>{% endif %}</nav>
+{% if module_access.process_material %}<a href="{% url 'process-material' %}">Material en proceso</a>{% endif %}{% if module_access.reports %}<a href="{% url 'report' %}">Reportes</a>{% endif %}{% if module_access.line_dashboard %}<a href="{% url 'line-dashboard' %}">Tablero de línea</a>{% endif %}{% if user.is_staff %}<a href="/admin/">Administración</a>{% endif %}</nav>{% endif %}
+<button id="theme-toggle" class="theme-toggle" type="button"><span>☾</span><b>Modo oscuro</b></button>
+{% if user.is_authenticated %}
 <form method="post" action="{% url 'logout' %}">{% csrf_token %}<button class="link">Salir</button></form>{% endif %}</header>
 <main>{% for message in messages %}<div class="message {{ message.tags }}">{{ message }}</div>{% endfor %}{% block content %}{% endblock %}</main>
-<footer>MESA · Sistema de control de inventario y producción</footer></body></html>
+<footer>MESA · Sistema de control de inventario y producción</footer><script src="{% static 'js/theme.js' %}"></script></body></html>
