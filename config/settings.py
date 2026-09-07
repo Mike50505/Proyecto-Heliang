@@ -1,10 +1,31 @@
 import os
 from pathlib import Path
+from django.core.exceptions import ImproperlyConfigured
+
+
+def env_list(name, default=""):
+    return [value.strip() for value in os.getenv(name, default).split(",") if value.strip()]
+
+
+def env_bool(name, default=False):
+    value = os.getenv(name, "1" if default else "0").strip().lower()
+    if value in {"1", "true", "yes", "on"}:
+        return True
+    if value in {"0", "false", "no", "off"}:
+        return False
+    raise ImproperlyConfigured(f"{name} debe ser 1/0 o true/false.")
 
 BASE_DIR = Path(__file__).resolve().parent.parent
 SECRET_KEY = os.getenv("DJANGO_SECRET_KEY", "dev-only-change-me")
-DEBUG = os.getenv("DJANGO_DEBUG", "1") == "1"
-ALLOWED_HOSTS = os.getenv("DJANGO_ALLOWED_HOSTS", "localhost,127.0.0.1").split(",")
+DEBUG = env_bool("DJANGO_DEBUG", default=True)
+ALLOWED_HOSTS = env_list("DJANGO_ALLOWED_HOSTS", "localhost,127.0.0.1")
+if "*" in ALLOWED_HOSTS:
+    raise ImproperlyConfigured("DJANGO_ALLOWED_HOSTS debe contener hosts explícitos, no '*'.")
+if not DEBUG and SECRET_KEY in {"", "dev-only-change-me", "local-only-change-me"}:
+    raise ImproperlyConfigured("Define DJANGO_SECRET_KEY para ejecutar con DJANGO_DEBUG=0.")
+
+# Same-origin requests need no extra trusted origins, including direct Tailscale HTTP.
+CSRF_TRUSTED_ORIGINS = env_list("DJANGO_CSRF_TRUSTED_ORIGINS")
 
 INSTALLED_APPS = [
     "django.contrib.admin", "django.contrib.auth", "django.contrib.contenttypes",

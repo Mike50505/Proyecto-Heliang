@@ -4,6 +4,8 @@ __pycache__/
 db.sqlite3
 staticfiles/
 .env
+.env.*
+!.env.example
 .pytest_cache/
 _respaldo_local_*/
 Copia de UNIVERSO RAMOS.XLSX
