@@ -16,14 +16,67 @@
   <button type="submit">Filtrar</button>
   <a class="button secondary" href="{% url 'order-list' %}">Limpiar</a>
 </form>
-<div class="panel table-wrap">
-  <table>
-    <thead><tr><th>Folio</th><th>Semana / orden de producción</th><th>Cliente</th><th>Parte</th><th>Cantidad</th><th>Restante</th><th>Requerida</th><th>Estado</th><th>Acciones</th></tr></thead>
+<form id="bulk-delete-form" method="post" action="{% url 'bulk-delete-orders' %}">
+  {% csrf_token %}
+  <div class="bulk-order-tools panel">
+    <div class="range-selector">
+      <b>Selección por filas</b>
+      <label>Desde <input id="range-start" type="number" min="1" max="{{ orders|length }}" placeholder="3"></label>
+      <label>Hasta <input id="range-end" type="number" min="1" max="{{ orders|length }}" placeholder="10"></label>
+      <button id="select-range" class="secondary" type="button">Seleccionar rango</button>
+    </div>
+    <div class="bulk-delete-actions">
+      <span><b id="selected-count">0</b> filas seleccionadas</span>
+      <button id="delete-selected" class="danger" type="submit" disabled>Eliminar seleccionadas</button>
+    </div>
+  </div>
+  <div class="panel table-wrap">
+  <table class="order-selection-table">
+    <thead><tr><th class="selection-cell"><input id="select-all" type="checkbox" aria-label="Seleccionar todas las filas visibles"></th><th>N.º</th><th>Folio</th><th>Semana / orden de producción</th><th>Cliente</th><th>Parte</th><th>Cantidad</th><th>Restante</th><th>Requerida</th><th>Estado</th><th>Acciones</th></tr></thead>
     <tbody>
       {% for row in orders %}
-        <tr><td>{{ row.folio }}</td><td>{{ row.program }}</td><td>{{ row.part.client.name|default:'—' }}</td><td>{{ row.part.number }}</td><td>{{ row.quantity|floatformat:"-3" }}</td><td>{{ row.remaining_quantity|floatformat:"-3" }}</td><td>{{ row.required_date|default:'—' }}</td><td><span class="status {{ row.status|lower }}">{{ row.get_status_display }}</span></td><td><div class="row-actions"><a class="button compact secondary" href="{% url 'edit-order' row.pk %}">Editar</a><a class="button compact danger" href="{% url 'delete-order' row.pk %}">Eliminar</a></div></td></tr>
-      {% empty %}<tr><td colspan="9">No hay órdenes.</td></tr>{% endfor %}
+        <tr data-row-number="{{ forloop.counter }}"><td class="selection-cell"><input class="order-checkbox" type="checkbox" name="order_ids" value="{{ row.pk }}" aria-label="Seleccionar fila {{ forloop.counter }}"></td><td class="visual-row-number">{{ forloop.counter }}</td><td>{{ row.folio }}</td><td>{{ row.program }}</td><td>{{ row.part.client.name|default:'—' }}</td><td>{{ row.part.number }}</td><td>{{ row.quantity|floatformat:"-3" }}</td><td>{{ row.remaining_quantity|floatformat:"-3" }}</td><td>{{ row.required_date|default:'—' }}</td><td><span class="status {{ row.status|lower }}">{{ row.get_status_display }}</span></td><td><div class="row-actions"><a class="button compact secondary" href="{% url 'edit-order' row.pk %}">Editar</a></div></td></tr>
+      {% empty %}<tr><td colspan="11">No hay órdenes.</td></tr>{% endfor %}
     </tbody>
   </table>
 </div>
+</form>
+<script>
+(() => {
+  const form = document.getElementById('bulk-delete-form');
+  const boxes = [...form.querySelectorAll('.order-checkbox')];
+  const selectAll = document.getElementById('select-all');
+  const count = document.getElementById('selected-count');
+  const deleteButton = document.getElementById('delete-selected');
+  const updateSelection = () => {
+    const selected = boxes.filter(box => box.checked).length;
+    count.textContent = selected;
+    deleteButton.disabled = selected === 0;
+    selectAll.checked = boxes.length > 0 && selected === boxes.length;
+    selectAll.indeterminate = selected > 0 && selected < boxes.length;
+  };
+  selectAll.addEventListener('change', () => {
+    boxes.forEach(box => { box.checked = selectAll.checked; });
+    updateSelection();
+  });
+  boxes.forEach(box => box.addEventListener('change', updateSelection));
+  document.getElementById('select-range').addEventListener('click', () => {
+    const start = Number(document.getElementById('range-start').value);
+    const end = Number(document.getElementById('range-end').value);
+    if (!Number.isInteger(start) || !Number.isInteger(end) || start < 1 || end < start || end > boxes.length) {
+      alert(`Captura un rango válido entre 1 y ${boxes.length}.`);
+      return;
+    }
+    boxes.forEach((box, index) => { box.checked = index + 1 >= start && index + 1 <= end; });
+    updateSelection();
+  });
+  form.addEventListener('submit', event => {
+    const selected = boxes.filter(box => box.checked).length;
+    if (!selected || !confirm(`¿Eliminar ${selected} órdenes seleccionadas? Las que tengan producción o material asociado se conservarán.`)) {
+      event.preventDefault();
+    }
+  });
+  updateSelection();
+})();
+</script>
 {% endblock %}

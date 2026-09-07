@@ -123,6 +123,11 @@ class Movement(TimeStamped):
     legacy_source = models.CharField(max_length=80, blank=True)
 
 
+class ProgramImportReceipt(models.Model):
+    # Independent of the order so deletion cannot make an imported row new again.
+    fingerprint = models.CharField(max_length=64, unique=True)
+
+
 class AuditEvent(models.Model):
     created_at = models.DateTimeField(auto_now_add=True)
     user = models.ForeignKey(settings.AUTH_USER_MODEL, null=True, on_delete=models.SET_NULL)

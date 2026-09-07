@@ -61,8 +61,8 @@ class MesaUserAdmin(UserAdmin):
 
 @admin.register(Part)
 class PartAdmin(admin.ModelAdmin):
-    list_display = ("number", "client", "unit_weight_kg")
-    search_fields = ("number", "description")
+    list_display = ("number", "client", "diameter", "unit_weight_kg")
+    search_fields = ("number", "description", "diameter")
     list_filter = ("client",)
 
 @admin.register(ProductionOrder)

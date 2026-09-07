@@ -4,5 +4,30 @@
 {% if active_tab == 'single' %}
 <section class="form-card wide"><div class="form-heading"><div><h2>Nuevo programa</h2><p>Completa la información de la orden y del empleado responsable.</p></div><span class="step-badge">Individual</span></div><form method="post">{% csrf_token %}<div class="form-grid">{{ form.as_div }}</div><div class="form-actions"><a class="button secondary" href="{% url 'dashboard' %}">Cancelar</a><button type="submit">Cargar programa</button></div></form></section>
 {% else %}
-<section class="form-card wide upload-card"><div class="form-heading"><div><h2>Carga masiva desde Excel</h2><p>Descarga y completa la plantilla oficial antes de importar.</p></div><a class="button secondary" href="{% url 'download-program-template' %}">Descargar plantilla Excel</a></div><div class="template-columns"><form method="post" enctype="multipart/form-data">{% csrf_token %}{{ form.as_p }}<div class="form-actions"><a class="button secondary" href="{% url 'dashboard' %}">Cancelar</a><button type="submit">Importar programas</button></div></form><aside><h3>Columnas de la plantilla</h3><ol><li>ID Cliente</li><li>Orden de Produccion</li><li>Linea Prod Clte</li><li>Fecha de Entrega</li><li>Num. Parte</li><li>Cantidad</li><li>Linea</li></ol><p>No cambies los encabezados ni el nombre de la hoja <b>Sheet1</b>. La importación es atómica: si una fila tiene errores, no se guarda ninguna.</p></aside></div></section>
+<section class="form-card wide upload-card"><div class="form-heading"><div><h2>Carga masiva desde Excel</h2><p>Descarga y completa la plantilla oficial antes de importar.</p></div><a class="button secondary" href="{% url 'download-program-template' %}">Descargar plantilla Excel</a></div><div class="template-columns"><form method="post" enctype="multipart/form-data">{% csrf_token %}{{ form.as_p }}<div class="form-actions"><a class="button secondary" href="{% url 'dashboard' %}">Cancelar</a><button type="submit">Ver vista previa</button></div></form><aside><h3>Columnas de la plantilla</h3><ol><li>ID Cliente</li><li>Orden de Produccion</li><li>Linea Prod Clte</li><li>Fecha de Entrega</li><li>Num. Parte</li><li>Cantidad</li><li>Linea</li></ol><p>No cambies los encabezados ni el nombre de la hoja <b>Sheet1</b>. La importación es atómica: si una fila tiene errores, no se guarda ninguna.</p></aside></div></section>
+{% if preview %}
+<section class="form-card wide">
+  <h2>Vista previa de la carga</h2>
+  <p>Aún no se han guardado programas. Cada fila se agregará con un folio nuevo, aunque sus datos se repitan. Se leen todas las filas con datos, incluso después de filas vacías.</p>
+  <p><strong>{{ preview_added }}</strong> por agregar · <strong>{{ preview_skipped }}</strong> por omitir · <strong>{{ preview_errors }}</strong> errores</p>
+  <div style="overflow: auto; max-height: 60vh;">
+    <table>
+      <thead><tr><th>Fila Excel</th><th>Cliente</th><th>Orden</th><th>Línea</th><th>Entrega</th><th>Parte</th><th>Cantidad</th><th>Resultado</th></tr></thead>
+      <tbody>{% for row in preview %}<tr>
+        <td>{{ row.row_number }}</td><td>{{ row.client_name|default:row.reference }}</td>
+        <td>{{ row.program }}</td><td>{{ row.line }}</td><td>{{ row.required_date|default:'—' }}</td>
+        <td>{{ row.part_number }}</td><td>{{ row.quantity }}</td><td>{{ row.status }}</td>
+      </tr>{% endfor %}</tbody>
+    </table>
+  </div>
+  {% if preview_token %}
+  <form method="post">{% csrf_token %}
+    <input type="hidden" name="action" value="confirm">
+    <input type="hidden" name="preview_token" value="{{ preview_token }}">
+    <p>Esta vista previa solo se puede confirmar una vez y vence en 30 minutos. Para otra carga, selecciona el archivo nuevamente.</p>
+    <div class="form-actions"><a class="button secondary" href="{% url 'bulk-load-program' %}">Cancelar</a><button type="submit">Confirmar carga</button></div>
+  </form>
+  {% else %}<p>Corrige los errores y vuelve a seleccionar el archivo para continuar.</p>{% endif %}
+</section>
+{% endif %}
 {% endif %}{% endblock %}

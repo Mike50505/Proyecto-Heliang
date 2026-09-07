@@ -5,7 +5,9 @@ from .models import Machine, Part, Process, ProductionOrder, WorkInProcess
 
 class OrderChoiceField(forms.ModelChoiceField):
     def label_from_instance(self, obj):
-        return f"{obj.folio} · {obj.program} · {obj.part.number} · saldo {obj.remaining_quantity}"
+        diameter = f" · diámetro {obj.part.diameter}" if obj.part.diameter else ""
+        return (f"{obj.folio} · {obj.program} · {obj.part.number}{diameter}"
+                f" · saldo {obj.remaining_quantity}")
 
 
 class WorkChoiceField(forms.ModelChoiceField):

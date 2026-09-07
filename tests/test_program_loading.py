@@ -7,7 +7,7 @@ from django.test import TestCase
 from django.urls import reverse
 from django.utils import timezone
 from openpyxl import Workbook, load_workbook
-from operations.models import (Client, Inventory, InventoryBucket, Machine, Movement,
+from operations.models import (AuditEvent, Client, Inventory, InventoryBucket, Machine, Movement,
                                Part, Process, ProductionClose, ProductionOrder, WorkInProcess)
 from operations.services import (create_program_order, move_process_material, move_surplus,
                                  resolve_program_client)
@@ -105,6 +105,12 @@ class ProgramLoadingTests(TestCase):
             "file": upload,
         })
 
+        self.assertEqual(response.status_code, 200)
+        self.assertFalse(ProductionOrder.objects.filter(program="OP-200").exists())
+        response = self.client.post(reverse("bulk-load-program"), {
+            "action": "confirm", "preview_token": response.context["preview_token"],
+        })
+
         self.assertRedirects(response, reverse("order-list"))
         order = ProductionOrder.objects.get(program="OP-200")
         self.assertEqual(order.line, "LINEA-7")
@@ -182,6 +188,65 @@ class ProgramLoadingTests(TestCase):
         )
         self.client.post(reverse("delete-order", args=[protected.pk]))
         self.assertTrue(ProductionOrder.objects.filter(pk=protected.pk).exists())
+
+    def test_bulk_delete_removes_selected_orders_with_one_request(self):
+        self.user.is_superuser = True
+        self.user.save(update_fields=["is_superuser"])
+        self.client.force_login(self.user)
+        part = Part.objects.create(number="BULK-DELETE-PART")
+        removable = ProductionOrder.objects.create(
+            folio="BULK-REMOVE", program="S50", part=part,
+            quantity=10, remaining_quantity=10,
+        )
+        untouched = ProductionOrder.objects.create(
+            folio="BULK-KEEP", program="S51", part=part,
+            quantity=10, remaining_quantity=10,
+        )
+        protected = ProductionOrder.objects.create(
+            folio="BULK-PROTECTED", program="S52", part=part,
+            quantity=10, remaining_quantity=10,
+        )
+        machine = Machine.objects.create(code="BULK-MACHINE")
+        WorkInProcess.objects.create(
+            folio="BULK-WORK", order=protected, machine=machine,
+            initial_quantity=10, remaining_quantity=10, started_at=timezone.now(),
+        )
+        Movement.objects.create(
+            folio=removable.folio, movement_type=Movement.Type.PROGRAM,
+            part=part, quantity=10, occurred_at=timezone.now(),
+        )
+
+        response = self.client.post(reverse("bulk-delete-orders"), {
+            "order_ids": [removable.pk, protected.pk],
+        }, follow=True)
+
+        self.assertFalse(ProductionOrder.objects.filter(pk=removable.pk).exists())
+        self.assertTrue(ProductionOrder.objects.filter(pk=protected.pk).exists())
+        self.assertTrue(ProductionOrder.objects.filter(pk=untouched.pk).exists())
+        self.assertFalse(Movement.objects.filter(folio="BULK-REMOVE").exists())
+        self.assertTrue(AuditEvent.objects.filter(
+            action="DELETE_PROGRAM", entity_id="BULK-REMOVE",
+            data={"source": "bulk_selection"},
+        ).exists())
+        self.assertContains(response, "Se eliminaron 1 órdenes seleccionadas")
+        self.assertContains(response, "No se eliminaron 1 órdenes")
+
+    def test_order_list_has_visual_numbers_and_range_selection(self):
+        self.user.is_superuser = True
+        self.user.save(update_fields=["is_superuser"])
+        self.client.force_login(self.user)
+        part = Part.objects.create(number="NUMBERED-PART")
+        ProductionOrder.objects.create(
+            folio="NUMBERED-1", program="S53", part=part,
+            quantity=10, remaining_quantity=10,
+        )
+
+        response = self.client.get(reverse("order-list"))
+
+        self.assertContains(response, "Selección por filas")
+        self.assertContains(response, 'data-row-number="1"')
+        self.assertContains(response, 'aria-label="Seleccionar fila 1"')
+        self.assertContains(response, "Seleccionar rango")
 
     def test_surplus_allocation_updates_both_balances(self):
         part = Part.objects.create(number="P-200")

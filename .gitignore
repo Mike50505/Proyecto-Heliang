@@ -10,3 +10,6 @@ Copia de UNIVERSO RAMOS.XLSX
 plantilla_carga_programas.xlsx
 reporte_produccion*.csv
 mesa_*.sql
+*.dump
+backup_*.sql
+~$*.xlsx

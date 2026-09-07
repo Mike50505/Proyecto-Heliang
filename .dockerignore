@@ -6,3 +6,5 @@ db.sqlite3
 staticfiles
 *.xlsm
 *.xlsx
+*.dump
+*.sql

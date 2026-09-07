@@ -4,19 +4,34 @@ from decimal import Decimal
 from django.core.exceptions import ValidationError
 from django.db import transaction
 from django.utils import timezone
+from hashlib import sha256
 from .models import (AuditEvent, Client, Inventory, InventoryBucket, Movement, Part,
-                     ProductionClose, ProductionOrder, WorkInProcess)
+                     ProductionClose, ProductionOrder, WorkInProcess, ProgramImportReceipt)
 
 
+@transaction.atomic
 def next_folio(model, prefix, moment=None):
     moment = moment or timezone.localtime()
     date_key = moment.strftime("%d%m%Y")
     base = f"{prefix}{date_key}-"
+    historical_folios = set()
+    if model is ProductionOrder:
+        # Serialize allocation until the caller's order transaction commits.
+        lock_key = sha256(f"folio-lock:{base}".encode()).hexdigest()
+        ProgramImportReceipt.objects.get_or_create(fingerprint=lock_key)
+        ProgramImportReceipt.objects.select_for_update().get(fingerprint=lock_key)
+        historical_folios = set(AuditEvent.objects.filter(
+            entity="ProductionOrder", entity_id__startswith=base
+        ).values_list("entity_id", flat=True))
     latest = model.objects.select_for_update().filter(folio__startswith=base).order_by("-id").first()
     sequence = 1
     if latest:
         match = re.search(r"-(\d+)$", latest.folio)
         sequence = int(match.group(1)) + 1 if match else latest.pk + 1
+    for folio in historical_folios:
+        suffix = folio[len(base):]
+        if suffix.isdigit():
+            sequence = max(sequence, int(suffix) + 1)
     candidate = f"{base}{sequence}"
     while model.objects.filter(folio=candidate).exists():
         sequence += 1

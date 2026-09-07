@@ -1,4 +1,6 @@
 import csv
+from hashlib import sha256
+from uuid import uuid4
 from io import BytesIO
 from zipfile import BadZipFile
 from datetime import date, datetime, time, timedelta
@@ -6,6 +8,7 @@ from decimal import Decimal, InvalidOperation
 from django.contrib import messages
 from django.contrib.auth.decorators import login_required
 from django.core.exceptions import ValidationError
+from django.core import signing
 from django.db import transaction
 from django.db.models import Count, Max, Q, Sum
 from django.db.models.functions import TruncDate
@@ -23,7 +26,7 @@ from .forms import (BulkProgramForm, CloseProductionForm, ProcessMovementForm,
                     ProductionOrderEditForm, ProgramOrderForm, StartProductionForm,
                     SurplusMovementForm)
 from .models import (AuditEvent, Inventory, InventoryBucket, Machine, Movement, Process, ProductionClose,
-                     ProductionOrder, WorkInProcess)
+                     ProductionOrder, WorkInProcess, ProgramImportReceipt)
 from .services import (close_production, create_program_order, move_process_material,
                        move_surplus, resolve_program_client, start_production)
 
@@ -122,6 +125,58 @@ def delete_order(request, pk):
     return render(request, "operations/order_confirm_delete.html", {
         "order": order, "blocked": blocked,
     })
+
+
+@login_required
+@module_required("program_loading")
+def bulk_delete_orders(request):
+    if request.method != "POST":
+        return redirect("order-list")
+
+    raw_ids = request.POST.getlist("order_ids")
+    try:
+        selected_ids = list(dict.fromkeys(int(value) for value in raw_ids))
+    except (TypeError, ValueError):
+        messages.error(request, "La selección contiene una orden inválida.")
+        return redirect("order-list")
+    if not selected_ids:
+        messages.error(request, "Selecciona al menos una fila para eliminar.")
+        return redirect("order-list")
+    if len(selected_ids) > 500:
+        messages.error(request, "Solo se pueden eliminar hasta 500 filas a la vez.")
+        return redirect("order-list")
+
+    orders = list(ProductionOrder.objects.filter(pk__in=selected_ids).prefetch_related("work_items"))
+    programs_with_material = set(InventoryBucket.objects.filter(
+        kind="PROGRAM", name__in={order.program for order in orders}, quantity__gt=0
+    ).values_list("name", flat=True))
+    deletable = [
+        order for order in orders
+        if not order.work_items.exists() and order.program not in programs_with_material
+    ]
+    blocked_count = len(orders) - len(deletable)
+
+    with transaction.atomic():
+        for order in deletable:
+            folio = order.folio
+            Movement.objects.filter(
+                folio=folio, movement_type=Movement.Type.PROGRAM
+            ).delete()
+            order.delete()
+            AuditEvent.objects.create(
+                user=request.user, action="DELETE_PROGRAM",
+                entity="ProductionOrder", entity_id=folio,
+                data={"source": "bulk_selection"},
+            )
+
+    if deletable:
+        messages.success(request, f"Se eliminaron {len(deletable)} órdenes seleccionadas.")
+    if blocked_count:
+        messages.error(request, (
+            f"No se eliminaron {blocked_count} órdenes porque tienen producción "
+            "o material asociado."
+        ))
+    return redirect("order-list")
 
 
 @login_required
@@ -287,6 +342,47 @@ def download_completed_programs(request):
 @login_required
 @module_required("program_loading")
 def bulk_load_program(request):
+    if request.method == "POST" and request.POST.get("action") == "confirm":
+        form = BulkProgramForm(request.POST)
+        try:
+            payload = signing.loads(request.POST.get("preview_token", ""),
+                                    salt="program-preview-v2", max_age=1800)
+            if payload["user"] != request.user.pk:
+                raise signing.BadSignature("Usuario incorrecto")
+            added = 0
+            with transaction.atomic():
+                # Only a repeated confirmation is a duplicate. A new upload,
+                # even of an identical file, is a new production batch.
+                receipt_key = sha256(f"batch:{payload['batch_id']}".encode()).hexdigest()
+                _, first_confirmation = ProgramImportReceipt.objects.get_or_create(fingerprint=receipt_key)
+                if not first_confirmation:
+                    messages.info(request, "Esta carga ya fue confirmada. Para una nueva producción, "
+                                  "selecciona el archivo y genera otra vista previa.")
+                    return redirect("order-list")
+                for row in payload["rows"]:
+                    client = resolve_program_client(client_reference=row["reference"],
+                                                    part_number=row["part_number"])
+                    if client.pk != row["client_id"]:
+                        raise ValidationError("Cambió el cliente de una fila. Genera otra vista previa.")
+                    create_program_order(
+                        client_name=row["reference"], client=client,
+                        program=row["program"], part_number=row["part_number"],
+                        quantity=Decimal(row["quantity"]), line=row["line"],
+                        required_date=date.fromisoformat(row["required_date"]) if row["required_date"] else None,
+                        employee=request.user, user=request.user,
+                        comment=f"Carga masiva: {payload['filename']}")
+                    added += 1
+                AuditEvent.objects.create(user=request.user, action="BULK_IMPORT_RESULT",
+                    entity="ProductionOrder", data={"file": payload["filename"],
+                        "added": added, "skipped": 0, "batch_id": payload["batch_id"]})
+        except signing.BadSignature:
+            form.add_error(None, "La vista previa venció o no es válida. Selecciona el archivo nuevamente.")
+        except (ValidationError, KeyError, ValueError) as exc:
+            form.add_error(None, exc)
+        else:
+            messages.success(request, f"Carga masiva terminada: {added} órdenes nuevas agregadas.")
+            return redirect("order-list")
+        return render(request, "operations/program_load.html", {"form": form, "active_tab": "bulk"})
     form = BulkProgramForm(request.POST or None, request.FILES or None)
     if request.method == "POST" and form.is_valid():
         try:
@@ -300,7 +396,6 @@ def bulk_load_program(request):
                 raise ValidationError(
                     "Los encabezados no coinciden con la plantilla. Se esperan: "
                     + ", ".join(expected + ["Linea"]))
-            employee = request.user
             rows, errors = [], []
             for row_number, row in enumerate(sheet.iter_rows(min_row=2, values_only=True), 2):
                 client, program, customer_line = map(_cell_text, row[:3])
@@ -320,26 +415,39 @@ def bulk_load_program(request):
                     required = required.date()
                 elif not isinstance(required, date):
                     required = None
-                rows.append((client, program, line, required, part_number, quantity))
+                rows.append((row_number, client, program, line, required, part_number, quantity))
+            workbook.close()
+            preview, payload_rows = [], []
+            added = 0
+            for row_number, client, program, line, required, part_number, quantity in rows:
+                item = {"row_number": row_number, "reference": client, "program": program,
+                        "line": line, "required_date": required.isoformat() if required else "",
+                        "part_number": part_number, "quantity": str(quantity)}
+                try:
+                    resolved_client = resolve_program_client(client_reference=client, part_number=part_number)
+                    item["client_id"] = resolved_client.pk
+                    item["client_name"] = resolved_client.name
+                    item["status"] = "Agregar como orden nueva"
+                    added += 1
+                    payload_rows.append(item.copy())
+                except ValidationError as exc:
+                    item["status"] = "Error: " + "; ".join(exc.messages)
+                    errors.append(f"Fila {row_number}: " + "; ".join(exc.messages))
+                preview.append(item)
             if errors:
-                raise ValidationError(errors[:12])
+                form.add_error("file", ValidationError(errors))
             if not rows:
-                raise ValidationError("El archivo no contiene filas válidas para importar.")
-            with transaction.atomic():
-                for client, program, line, required, part_number, quantity in rows:
-                    resolved_client = resolve_program_client(
-                        client_reference=client, part_number=part_number)
-                    create_program_order(client_name=client, part_number=part_number,
-                                         program=program, quantity=quantity,
-                                         required_date=required, line=line,
-                                         employee=employee, user=request.user,
-                                         comment=f"Carga masiva: {form.cleaned_data['file'].name}",
-                                         client=resolved_client)
+                form.add_error("file", "El archivo no contiene filas válidas para importar.")
+            token = signing.dumps({"user": request.user.pk, "rows": payload_rows, "batch_id": str(uuid4()),
+                                   "filename": request.FILES["file"].name},
+                                  salt="program-preview-v2", compress=True) if rows and not errors else ""
+            return render(request, "operations/program_load.html", {
+                "form": form, "active_tab": "bulk", "preview": preview,
+                "preview_token": token, "preview_added": added,
+                "preview_skipped": len(payload_rows) - added, "preview_errors": len(errors),
+            })
         except (ValidationError, KeyError, ValueError, BadZipFile, InvalidFileException) as exc:
             form.add_error("file", exc)
-        else:
-            messages.success(request, f"Carga masiva terminada: {len(rows)} programas agregados.")
-            return redirect("order-list")
     return render(request, "operations/program_load.html", {"form": form, "active_tab": "bulk"})
 
 
