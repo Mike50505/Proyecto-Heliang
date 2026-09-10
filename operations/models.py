@@ -71,6 +71,7 @@ class ProductionOrder(TimeStamped):
     remaining_quantity = models.DecimalField(max_digits=14, decimal_places=3, validators=[MinValueValidator(Decimal("0"))])
     required_date = models.DateField(null=True, blank=True)
     line = models.CharField(max_length=80, blank=True)
+    priority = models.PositiveIntegerField(null=True, blank=True, db_index=True)
     status = models.CharField(max_length=12, choices=Status.choices, default=Status.OPEN)
     loaded_by = models.ForeignKey(settings.AUTH_USER_MODEL, null=True, blank=True, on_delete=models.SET_NULL)
     legacy_id = models.CharField(max_length=80, blank=True, db_index=True)

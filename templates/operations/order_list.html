@@ -32,11 +32,11 @@
   </div>
   <div class="panel table-wrap">
   <table class="order-selection-table">
-    <thead><tr><th class="selection-cell"><input id="select-all" type="checkbox" aria-label="Seleccionar todas las filas visibles"></th><th>N.º</th><th>Folio</th><th>Semana / orden de producción</th><th>Cliente</th><th>Parte</th><th>Cantidad</th><th>Restante</th><th>Requerida</th><th>Estado</th><th>Acciones</th></tr></thead>
+    <thead><tr><th class="selection-cell"><input id="select-all" type="checkbox" aria-label="Seleccionar todas las filas visibles"></th><th>N.º</th><th>Folio</th><th>Prioridad</th><th>Semana / orden de producción</th><th>Cliente</th><th>Parte</th><th>Cantidad</th><th>Restante</th><th>Requerida</th><th>Estado</th><th>Acciones</th></tr></thead>
     <tbody>
       {% for row in orders %}
-        <tr data-row-number="{{ forloop.counter }}"><td class="selection-cell"><input class="order-checkbox" type="checkbox" name="order_ids" value="{{ row.pk }}" aria-label="Seleccionar fila {{ forloop.counter }}"></td><td class="visual-row-number">{{ forloop.counter }}</td><td>{{ row.folio }}</td><td>{{ row.program }}</td><td>{{ row.part.client.name|default:'—' }}</td><td>{{ row.part.number }}</td><td>{{ row.quantity|floatformat:"-3" }}</td><td>{{ row.remaining_quantity|floatformat:"-3" }}</td><td>{{ row.required_date|default:'—' }}</td><td><span class="status {{ row.status|lower }}">{{ row.get_status_display }}</span></td><td><div class="row-actions"><a class="button compact secondary" href="{% url 'edit-order' row.pk %}">Editar</a></div></td></tr>
-      {% empty %}<tr><td colspan="11">No hay órdenes.</td></tr>{% endfor %}
+        <tr data-row-number="{{ forloop.counter }}"><td class="selection-cell"><input class="order-checkbox" type="checkbox" name="order_ids" value="{{ row.pk }}" aria-label="Seleccionar fila {{ forloop.counter }}"></td><td class="visual-row-number">{{ forloop.counter }}</td><td>{{ row.folio }}</td><td>{% if row.priority %}<span class="priority-badge">{{ row.priority|stringformat:'02d' }}</span>{% else %}—{% endif %}</td><td>{{ row.program }}</td><td>{{ row.part.client.name|default:'—' }}</td><td>{{ row.part.number }}</td><td>{{ row.quantity|floatformat:"-3" }}</td><td>{{ row.remaining_quantity|floatformat:"-3" }}</td><td>{{ row.required_date|default:'—' }}</td><td><span class="status {{ row.status|lower }}">{{ row.get_status_display }}</span></td><td><div class="row-actions"><a class="button compact secondary" href="{% url 'edit-order' row.pk %}">Editar</a></div></td></tr>
+      {% empty %}<tr><td colspan="12">No hay órdenes.</td></tr>{% endfor %}
     </tbody>
   </table>
 </div>

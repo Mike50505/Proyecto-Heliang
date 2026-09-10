@@ -18,6 +18,10 @@
 .nav-priority { color:#fff !important; font-weight:750 !important; }
 .nav-priority::before { content:""; display:inline-block; width:6px; height:6px; margin-right:6px; border-radius:50%; background:#25c5d9; vertical-align:middle; }
 .priority-card { border:2px solid #79d5df; box-shadow:0 8px 24px #17a4b820; }
+.priority-panel { margin:18px 0 16px; padding:0; overflow:hidden; border-top:4px solid #d68518; }
+.priority-row { background:#fff7e8; }
+.priority-row td { border-bottom-color:#f3d7a2; }
+.priority-badge { display:inline-flex; align-items:center; justify-content:center; min-width:32px; height:25px; padding:0 7px; border-radius:999px; background:#d68518; color:#fff; font-weight:800; font-variant-numeric:tabular-nums; }
 .heliang-hero { display:flex; align-items:center; justify-content:space-between; gap:25px; color:#fff; padding:27px 30px; border-radius:15px; background:linear-gradient(115deg,#10283f,#106b83); margin-bottom:16px; }
 .heliang-hero h1 { font-size:32px; margin:0 0 7px; }
 .heliang-hero p { margin:0; color:#cce4eb; }

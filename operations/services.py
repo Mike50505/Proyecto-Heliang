@@ -8,6 +8,9 @@ from hashlib import sha256
 from .models import (AuditEvent, Client, Inventory, InventoryBucket, Movement, Part,
                      ProductionClose, ProductionOrder, WorkInProcess, ProgramImportReceipt)
 
+SHIFT_B_START = time(16, 36)
+SHIFT_A_START = time(6, 0)
+
 
 @transaction.atomic
 def next_folio(model, prefix, moment=None):
@@ -66,7 +69,7 @@ def resolve_program_client(*, client_reference, part_number):
 
 @transaction.atomic
 def create_program_order(*, client_name, part_number, program, quantity, employee=None,
-                         required_date=None, line="", comment="", user=None, client=None):
+                         required_date=None, line="", priority=None, comment="", user=None, client=None):
     quantity = Decimal(quantity)
     if quantity <= 0:
         raise ValidationError("La cantidad debe ser mayor que cero.")
@@ -81,7 +84,7 @@ def create_program_order(*, client_name, part_number, program, quantity, employe
     order = ProductionOrder.objects.create(
         folio=next_folio(ProductionOrder, "O"), program=program.strip(), part=part,
         quantity=quantity, remaining_quantity=quantity, required_date=required_date,
-        line=line.strip(), loaded_by=employee,
+        line=line.strip(), priority=priority, loaded_by=employee,
     )
     Movement.objects.create(
         folio=order.folio, movement_type=Movement.Type.PROGRAM, part=part,
@@ -182,7 +185,7 @@ def close_production(*, work_item, quantity, employee=None, user=None, comment="
     if work.status != WorkInProcess.Status.ACTIVE or quantity <= 0 or quantity > work.remaining_quantity:
         raise ValidationError("La cantidad debe ser positiva y no superar el saldo en proceso.")
     local_time = timezone.localtime(when).time()
-    shift = "Turno B" if local_time >= time(16, 36) else "Turno A"
+    shift = "Turno A" if SHIFT_A_START <= local_time < SHIFT_B_START else "Turno B"
     unit_weight = work.order.part.unit_weight_kg or Decimal("0")
     close = ProductionClose.objects.create(
         folio=next_folio(ProductionClose, "C", when), work_item=work, quantity=quantity,
@@ -192,6 +195,19 @@ def close_production(*, work_item, quantity, employee=None, user=None, comment="
     if work.remaining_quantity == 0:
         work.status = WorkInProcess.Status.CLOSED
     work.save(update_fields=["remaining_quantity", "status", "updated_at"])
+    released = work.remaining_quantity
+    if released:
+        order = ProductionOrder.objects.select_for_update().get(pk=work.order_id)
+        order.remaining_quantity += released
+        order.status = ProductionOrder.Status.OPEN
+        order.save(update_fields=["remaining_quantity", "status", "updated_at"])
+        work.remaining_quantity = 0
+        work.status = WorkInProcess.Status.CLOSED
+        work.save(update_fields=["remaining_quantity", "status", "updated_at"])
+        AuditEvent.objects.create(
+            user=user, action="RELEASE_PRODUCTION", entity="WorkInProcess", entity_id=work.folio,
+            data={"order": order.folio, "released_quantity": str(released),
+                  "machine": work.machine.code})
     AuditEvent.objects.create(user=user, action="CLOSE_PRODUCTION", entity="ProductionClose", entity_id=close.folio,
         data={"work_item": work.folio, "quantity": str(quantity), "weight_kg": str(close.weight_kg)})
     return close

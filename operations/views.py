@@ -10,7 +10,7 @@ from django.contrib.auth.decorators import login_required
 from django.core.exceptions import ValidationError
 from django.core import signing
 from django.db import transaction
-from django.db.models import Count, Max, Q, Sum
+from django.db.models import Case, Count, IntegerField, Max, Q, Sum, Value, When
 from django.db.models.functions import TruncDate
 from django.http import HttpResponse, JsonResponse
 from django.shortcuts import get_object_or_404, redirect, render
@@ -27,8 +27,8 @@ from .forms import (BulkProgramForm, CloseProductionForm, ProcessMovementForm,
                     SurplusMovementForm)
 from .models import (AuditEvent, Inventory, InventoryBucket, Machine, Movement, Process, ProductionClose,
                      ProductionOrder, WorkInProcess, ProgramImportReceipt)
-from .services import (close_production, create_program_order, move_process_material,
-                       move_surplus, resolve_program_client, start_production)
+from .services import (close_production, create_program_order, move_process_material, move_surplus,
+                       resolve_program_client, start_production)
 
 
 @login_required
@@ -189,6 +189,7 @@ def load_program(request):
             client_name=form.cleaned_data["client"], part_number=form.cleaned_data["part_number"],
             program=form.cleaned_data["program"], quantity=form.cleaned_data["quantity"],
             required_date=form.cleaned_data["required_date"], line=form.cleaned_data["line"],
+            priority=form.cleaned_data["priority"],
             comment=form.cleaned_data["comment"], employee=employee, user=request.user)
         messages.success(request, f"Programa cargado correctamente con el folio {order.folio}.")
         return redirect("order-list")
@@ -364,11 +365,19 @@ def bulk_load_program(request):
                                                     part_number=row["part_number"])
                     if client.pk != row["client_id"]:
                         raise ValidationError("Cambió el cliente de una fila. Genera otra vista previa.")
+                    raw_priority = request.POST.get(f"priority_{row['row_number']}", "").strip()
+                    try:
+                        priority = int(raw_priority) if raw_priority else None
+                    except (TypeError, ValueError):
+                        raise ValidationError(f"La prioridad de la fila {row['row_number']} debe ser un entero mayor que cero.")
+                    if priority is not None and priority < 1:
+                        raise ValidationError(f"La prioridad de la fila {row['row_number']} debe ser un entero mayor que cero.")
                     create_program_order(
                         client_name=row["reference"], client=client,
                         program=row["program"], part_number=row["part_number"],
                         quantity=Decimal(row["quantity"]), line=row["line"],
                         required_date=date.fromisoformat(row["required_date"]) if row["required_date"] else None,
+                        priority=priority,
                         employee=request.user, user=request.user,
                         comment=f"Carga masiva: {payload['filename']}")
                     added += 1
@@ -422,7 +431,7 @@ def bulk_load_program(request):
             for row_number, client, program, line, required, part_number, quantity in rows:
                 item = {"row_number": row_number, "reference": client, "program": program,
                         "line": line, "required_date": required.isoformat() if required else "",
-                        "part_number": part_number, "quantity": str(quantity)}
+                        "part_number": part_number, "quantity": str(quantity), "priority": ""}
                 try:
                     resolved_client = resolve_program_client(client_reference=client, part_number=part_number)
                     item["client_id"] = resolved_client.pk
@@ -576,8 +585,33 @@ def heliang(request):
         else:
             messages.success(request, f"Producción cerrada con el folio {close.folio}.")
             return redirect("heliang")
-    open_orders = ProductionOrder.objects.filter(status=ProductionOrder.Status.OPEN).select_related(
-        "part", "part__client").order_by("required_date", "created_at")[:100]
+    if False:  # Pausing is handled by the single release button in the close form.
+        try:
+            work = pause_production(work_item=pause_form.cleaned_data["work_item"],
+                                    employee=request.user, user=request.user,
+                                    comment=pause_form.cleaned_data["comment"])
+        except ValidationError as exc:
+            pause_form.add_error(None, exc)
+        else:
+            messages.success(request, f"Producción {work.folio} pausada; la máquina quedó disponible.")
+            return redirect("heliang")
+    if False:  # Resuming is handled by returning the unproduced balance to open orders.
+        try:
+            work = resume_production(work_item=resume_form.cleaned_data["work_item"],
+                                     machine=resume_form.cleaned_data["machine"],
+                                     employee=request.user, user=request.user)
+        except ValidationError as exc:
+            resume_form.add_error(None, exc)
+        else:
+            messages.success(request, f"Producción {work.folio} reanudada en {work.machine.code}.")
+            return redirect("heliang")
+    open_orders_query = ProductionOrder.objects.filter(status=ProductionOrder.Status.OPEN).select_related(
+        "part", "part__client").annotate(
+            priority_sort=Case(When(priority__isnull=True, then=Value(2147483647)),
+                               default="priority", output_field=IntegerField())
+        ).order_by("priority_sort", "required_date", "created_at")
+    priority_orders = open_orders_query.filter(priority__isnull=False)[:100]
+    open_orders = open_orders_query[:100]
     active_items = WorkInProcess.objects.filter(status=WorkInProcess.Status.ACTIVE).select_related(
         "order__part", "machine", "started_by").order_by("started_at")
     recent_closes = ProductionClose.objects.select_related(
@@ -588,6 +622,7 @@ def heliang(request):
                     for machine in machines]
     return render(request, "operations/heliang.html", {
         "start_form": start_form, "close_form": close_form, "open_orders": open_orders,
+        "priority_orders": priority_orders,
         "order_balances": {str(order.pk): str(order.remaining_quantity) for order in open_orders},
         "active_items": active_items, "recent_closes": recent_closes,
         "machine_rows": machine_rows, "selected_order": selected_order,

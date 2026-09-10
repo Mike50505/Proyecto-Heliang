@@ -24,6 +24,8 @@ class ProgramOrderForm(forms.Form):
     required_date = forms.DateField(label="Fecha de entrega", required=False,
                                     widget=forms.DateInput(attrs={"type": "date"}))
     line = forms.CharField(label="Línea del cliente", max_length=80, required=False)
+    priority = forms.IntegerField(label="Prioridad", min_value=1, required=False,
+                                  help_text="1 es la prioridad mÃ¡s alta.")
     comment = forms.CharField(label="Comentarios", required=False,
                               widget=forms.Textarea(attrs={"rows": 2}))
 
@@ -31,7 +33,7 @@ class ProgramOrderForm(forms.Form):
 class ProductionOrderEditForm(forms.ModelForm):
     class Meta:
         model = ProductionOrder
-        fields = ("program", "part", "quantity", "required_date", "line")
+        fields = ("program", "part", "quantity", "required_date", "line", "priority")
         widgets = {"required_date": forms.DateInput(attrs={"type": "date"})}
         labels = {
             "program": "Semana / orden de producción", "part": "Número de parte",
