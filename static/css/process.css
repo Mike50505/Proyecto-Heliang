@@ -30,7 +30,7 @@
 .board-column.active tbody tr { background:#dff4fb !important; box-shadow:inset 5px 0 0 var(--cyan); }
 .board-column.active tbody tr td { color:#16445d; }
 .board-column.active tbody tr { background:transparent !important; box-shadow:none; }
-.board-column.active tbody tr.priority-row { background:#dff4fb !important; box-shadow:inset 5px 0 0 var(--cyan); }
+.board-column.active tbody tr.priority-row { background:#fff7e8 !important; box-shadow:inset 5px 0 0 var(--amber); }
 .heliang-hero { display:flex; align-items:center; justify-content:space-between; gap:25px; color:#fff; padding:27px 30px; border-radius:15px; background:linear-gradient(115deg,#10283f,#106b83); margin-bottom:16px; }
 .heliang-hero h1 { font-size:32px; margin:0 0 7px; }
 .heliang-hero p { margin:0; color:#cce4eb; }

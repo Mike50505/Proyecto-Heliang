@@ -3,6 +3,7 @@ from datetime import time
 from decimal import Decimal
 from django.core.exceptions import ValidationError
 from django.db import transaction
+from django.db.models import F
 from django.utils import timezone
 from hashlib import sha256
 from .models import (AuditEvent, Client, Inventory, InventoryBucket, Movement, Part,
@@ -73,6 +74,8 @@ def create_program_order(*, client_name, part_number, program, quantity, employe
     quantity = Decimal(quantity)
     if quantity <= 0:
         raise ValidationError("La cantidad debe ser mayor que cero.")
+    if priority is not None and int(priority) < 1:
+        raise ValidationError("La prioridad debe ser un entero mayor que cero.")
     client_name = client_name.strip()
     if client is None:
         client_code = re.sub(r"[^A-Z0-9]+", "-", client_name.upper()).strip("-")[:30] or "SIN-CLIENTE"
@@ -81,6 +84,8 @@ def create_program_order(*, client_name, part_number, program, quantity, employe
     if part.client_id != client.pk:
         part.client = client
         part.save(update_fields=["client", "updated_at"])
+    if priority is not None:
+        ProductionOrder.objects.select_for_update().filter(priority__gte=int(priority)).update(priority=F("priority") + 1)
     order = ProductionOrder.objects.create(
         folio=next_folio(ProductionOrder, "O"), program=program.strip(), part=part,
         quantity=quantity, remaining_quantity=quantity, required_date=required_date,
@@ -96,6 +101,31 @@ def create_program_order(*, client_name, part_number, program, quantity, employe
                               data={"program": order.program, "part": part.number,
                                     "quantity": str(quantity)})
     return order
+
+
+@transaction.atomic
+def set_production_order_priority(*, order, priority, user=None):
+    if priority is not None and int(priority) < 1:
+        raise ValidationError("La prioridad debe ser un entero mayor que cero.")
+    current = ProductionOrder.objects.select_for_update().get(pk=order.pk)
+    old = current.priority
+    priority = int(priority) if priority is not None else None
+    if old == priority:
+        return current
+    if old is None and priority is not None:
+        ProductionOrder.objects.select_for_update().filter(priority__gte=priority).exclude(pk=current.pk).update(priority=F("priority") + 1)
+    elif old is not None and priority is None:
+        ProductionOrder.objects.select_for_update().filter(priority__gt=old).update(priority=F("priority") - 1)
+    elif old is not None and priority is not None:
+        if priority < old:
+            ProductionOrder.objects.select_for_update().filter(priority__gte=priority, priority__lt=old).exclude(pk=current.pk).update(priority=F("priority") + 1)
+        elif priority > old:
+            ProductionOrder.objects.select_for_update().filter(priority__gt=old, priority__lte=priority).exclude(pk=current.pk).update(priority=F("priority") - 1)
+    current.priority = priority
+    current.save(update_fields=["priority", "updated_at"])
+    AuditEvent.objects.create(user=user, action="EDIT_PRIORITY", entity="ProductionOrder",
+                              entity_id=current.folio, data={"priority": priority, "previous": old})
+    return current
 
 
 @transaction.atomic

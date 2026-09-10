@@ -28,7 +28,7 @@ from .forms import (BulkProgramForm, CloseProductionForm, ProcessMovementForm,
 from .models import (AuditEvent, Inventory, InventoryBucket, Machine, Movement, Process, ProductionClose,
                      ProductionOrder, WorkInProcess, ProgramImportReceipt)
 from .services import (close_production, create_program_order, move_process_material, move_surplus,
-                       resolve_program_client, start_production)
+                       resolve_program_client, set_production_order_priority, start_production)
 
 
 @login_required
@@ -118,10 +118,7 @@ def update_order_priority(request, pk):
             return JsonResponse({"error": "La prioridad debe ser un entero mayor que cero."}, status=400)
     else:
         priority = None
-    order.priority = priority
-    order.save(update_fields=["priority", "updated_at"])
-    AuditEvent.objects.create(user=request.user, action="EDIT_PRIORITY", entity="ProductionOrder",
-                              entity_id=order.folio, data={"priority": priority})
+    set_production_order_priority(order=order, priority=priority, user=request.user)
     return JsonResponse({"priority": priority, "display": f"{priority:02d}" if priority else ""})
 
 
