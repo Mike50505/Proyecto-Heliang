@@ -5,6 +5,7 @@ urlpatterns = [
     path("", views.dashboard, name="dashboard"),
     path("ordenes/", views.order_list, name="order-list"),
     path("ordenes/<int:pk>/editar/", views.edit_order, name="edit-order"),
+    path("ordenes/<int:pk>/prioridad/", views.update_order_priority, name="update-order-priority"),
     path("ordenes/<int:pk>/eliminar/", views.delete_order, name="delete-order"),
     path("ordenes/eliminar-seleccion/", views.bulk_delete_orders, name="bulk-delete-orders"),
     path("programas/cargar/", views.load_program, name="load-program"),

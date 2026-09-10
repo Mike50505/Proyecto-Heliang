@@ -57,6 +57,14 @@ html[data-theme="dark"] .machine-pill { color:#77e4bd; background:#153f35; }
 html[data-theme="dark"] .template-columns aside { background:#112537; }
 html[data-theme="dark"] .filter-chip { color:#9eeaf4; background:#174052; }
 html[data-theme="dark"] .delete-warning { color:#ffb4bc; border-color:#743943; background:#351c24; }
+html[data-theme="dark"] .priority-panel { background:#0d1d2c; border-color:#8b5a19; }
+html[data-theme="dark"] .priority-row { background:#3a2b18; }
+html[data-theme="dark"] .priority-row td { border-color:#5c4527; }
+html[data-theme="dark"] .board-column.active { border-top-color:#35c9dd; }
+html[data-theme="dark"] .board-column.active tbody tr { background:#102f40; }
+html[data-theme="dark"] .board-column.active tbody tr:hover { background:#16435a; }
+html[data-theme="dark"] .priority-input { background:#102233; color:#eaf2f7; border-color:#d39a37; }
+html[data-theme="dark"] .priority-save-state { color:#77e4bd; }
 
 .theme-toggle { display:flex; align-items:center; gap:7px; flex:0 0 auto; padding:8px 10px; border:1px solid #486276; border-radius:8px; color:#e7f1f7; background:#ffffff0d; }
 .theme-toggle:hover { transform:none; box-shadow:none; border-color:#45c8da; background:#ffffff18; }

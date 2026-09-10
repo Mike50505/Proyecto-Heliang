@@ -104,6 +104,29 @@ def edit_order(request, pk):
 
 @login_required
 @module_required("program_loading")
+def update_order_priority(request, pk):
+    if request.method != "POST":
+        return JsonResponse({"error": "MÃ©todo no permitido."}, status=405)
+    order = get_object_or_404(ProductionOrder, pk=pk)
+    raw_priority = request.POST.get("priority", "").strip()
+    if raw_priority:
+        try:
+            priority = int(raw_priority)
+        except ValueError:
+            return JsonResponse({"error": "La prioridad debe ser un entero mayor que cero."}, status=400)
+        if priority < 1:
+            return JsonResponse({"error": "La prioridad debe ser un entero mayor que cero."}, status=400)
+    else:
+        priority = None
+    order.priority = priority
+    order.save(update_fields=["priority", "updated_at"])
+    AuditEvent.objects.create(user=request.user, action="EDIT_PRIORITY", entity="ProductionOrder",
+                              entity_id=order.folio, data={"priority": priority})
+    return JsonResponse({"priority": priority, "display": f"{priority:02d}" if priority else ""})
+
+
+@login_required
+@module_required("program_loading")
 def delete_order(request, pk):
     order = get_object_or_404(ProductionOrder, pk=pk)
     has_production = order.work_items.exists()

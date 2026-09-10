@@ -79,4 +79,31 @@
   updateSelection();
 })();
 </script>
+<script>
+(() => {
+  const csrf = document.querySelector('[name="csrfmiddlewaretoken"]')?.value;
+  document.querySelectorAll('.order-selection-table tbody tr').forEach(row => {
+    const checkbox = row.querySelector('.order-checkbox');
+    const cell = row.children[3];
+    if (!checkbox || !cell) return;
+    const current = cell.querySelector('.priority-badge')?.textContent.trim() || '';
+    cell.textContent = '';
+    const wrap = document.createElement('div'); wrap.className = 'priority-editor';
+    const input = document.createElement('input'); input.className = 'priority-input'; input.type = 'number'; input.min = '1'; input.step = '1'; input.inputMode = 'numeric'; input.value = current ? String(Number(current)) : ''; input.placeholder = '—'; input.setAttribute('aria-label', `Prioridad de ${checkbox.value}`);
+    const state = document.createElement('span'); state.className = 'priority-save-state'; state.setAttribute('aria-live', 'polite');
+    input.addEventListener('change', async () => {
+      state.textContent = 'Guardando…'; input.disabled = true;
+      try {
+        const response = await fetch(`/ordenes/${checkbox.value}/prioridad/`, {method: 'POST', headers: {'X-CSRFToken': csrf, 'Content-Type': 'application/x-www-form-urlencoded'}, body: `priority=${encodeURIComponent(input.value)}`});
+        const data = await response.json();
+        if (!response.ok) throw new Error(data.error || 'No se pudo guardar');
+        state.textContent = 'Guardado';
+        setTimeout(() => { state.textContent = ''; }, 1600);
+      } catch (error) { state.textContent = 'Error'; }
+      input.disabled = false;
+    });
+    wrap.append(input, state); cell.appendChild(wrap);
+  });
+})();
+</script>
 {% endblock %}
