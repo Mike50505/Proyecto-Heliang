@@ -6,12 +6,12 @@
 {% else %}
 <section class="form-card wide upload-card"><div class="form-heading"><div><h2>Carga masiva desde Excel</h2><p>Descarga y completa la plantilla oficial antes de importar.</p></div><a class="button secondary" href="{% url 'download-program-template' %}">Descargar plantilla Excel</a></div><div class="template-columns"><form method="post" enctype="multipart/form-data">{% csrf_token %}{{ form.as_p }}<div class="form-actions"><a class="button secondary" href="{% url 'dashboard' %}">Cancelar</a><button type="submit">Ver vista previa</button></div></form><aside><h3>Columnas de la plantilla</h3><ol><li>ID Cliente</li><li>Orden de Produccion</li><li>Linea Prod Clte</li><li>Fecha de Entrega</li><li>Num. Parte</li><li>Cantidad</li><li>Linea</li></ol><p>No cambies los encabezados ni el nombre de la hoja <b>Sheet1</b>. La importación es atómica: si una fila tiene errores, no se guarda ninguna.</p></aside></div></section>
 {% if preview %}
-<section class="form-card wide">
+<section class="form-card wide bulk-preview-card">
   <h2>Vista previa de la carga</h2>
   <p>Aún no se han guardado programas. Cada fila se agregará con un folio nuevo, aunque sus datos se repitan. Se leen todas las filas con datos, incluso después de filas vacías.</p>
   <p><strong>{{ preview_added }}</strong> por agregar · <strong>{{ preview_skipped }}</strong> por omitir · <strong>{{ preview_errors }}</strong> errores</p>
   <div style="overflow: auto; max-height: 60vh;">
-    <table>
+    <table class="preview-table">
       <thead><tr><th>Fila Excel</th><th>Cliente</th><th>Orden</th><th>Línea</th><th>Entrega</th><th>Parte</th><th>Cantidad</th><th>Prioridad</th><th>Resultado</th></tr></thead>
       <tbody>{% for row in preview %}<tr>
         <td>{{ row.row_number }}</td><td>{{ row.client_name|default:row.reference }}</td>

@@ -150,6 +150,7 @@ class ModuleAccess(models.Model):
     surplus = models.BooleanField("material sobrante", default=False)
     process_material = models.BooleanField("material en proceso", default=False)
     reports = models.BooleanField("reportes", default=False)
+    universe = models.BooleanField("Universo Ramos Arizpe", default=True)
     line_dashboard = models.BooleanField("tablero visual de línea", default=False)
 
     class Meta:

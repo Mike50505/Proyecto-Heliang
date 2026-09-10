@@ -102,6 +102,12 @@ class Command(BaseCommand):
             part = Part.objects.filter(number=part_number).first()
             if part is None:
                 missing_parts += 1
+                part = Part.objects.create(
+                    number=part_number,
+                    client=client,
+                    diameter=diameter if diameter and part_number not in conflicting_parts else "",
+                )
+                updated_parts += 1
                 continue
             part_changes = []
             if client is not None and part.client_id != client.pk:

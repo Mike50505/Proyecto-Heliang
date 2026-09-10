@@ -1,7 +1,7 @@
 from decimal import Decimal
 from django import forms
 from django.db.models import Case, IntegerField, Value, When
-from .models import Machine, Part, Process, ProductionOrder, WorkInProcess
+from .models import Client, Machine, Part, Process, ProductionOrder, WorkInProcess
 
 
 class OrderChoiceField(forms.ModelChoiceField):
@@ -81,6 +81,31 @@ class BulkProgramForm(forms.Form):
             raise forms.ValidationError("Selecciona un archivo .xlsx.")
         if value.size > 10 * 1024 * 1024:
             raise forms.ValidationError("El archivo no puede superar 10 MB.")
+        return value
+
+
+class UniversePartForm(forms.ModelForm):
+    class Meta:
+        model = Part
+        fields = ("number", "description", "client", "diameter", "unit_weight_kg")
+        labels = {"number": "N.º de parte", "description": "Descripción", "client": "Cliente",
+                  "diameter": "Diámetro", "unit_weight_kg": "Peso unitario (kg)"}
+
+    def __init__(self, *args, **kwargs):
+        super().__init__(*args, **kwargs)
+        self.fields["client"].queryset = Client.objects.order_by("name")
+
+
+class UniverseImportForm(forms.Form):
+    file = forms.FileField(label="Archivo Excel del Universo (.xlsx)",
+                           widget=forms.ClearableFileInput(attrs={"accept": ".xlsx"}))
+
+    def clean_file(self):
+        value = self.cleaned_data["file"]
+        if not value.name.lower().endswith(".xlsx"):
+            raise forms.ValidationError("Selecciona un archivo .xlsx.")
+        if value.size > 20 * 1024 * 1024:
+            raise forms.ValidationError("El archivo no puede superar 20 MB.")
         return value
 
 

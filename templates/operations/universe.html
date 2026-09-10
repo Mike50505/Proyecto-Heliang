@@ -1,0 +1,11 @@
+{% extends 'base.html' %}
+{% block title %}Universo Ramos Arizpe · MESA{% endblock %}
+{% block content %}
+<div class="title-row"><div><span class="eyebrow">CATÁLOGO MAESTRO</span><h1>Universo Ramos Arizpe</h1><p>Números de parte, clientes y diámetros disponibles.</p></div></div>
+<div class="universe-layout">
+  <section class="form-card no-margin"><h2>Agregar pieza</h2><form method="post">{% csrf_token %}<input type="hidden" name="action" value="add">{{ part_form.as_p }}<div class="form-actions"><button type="submit">Guardar pieza</button></div></form></section>
+  <section class="form-card no-margin"><h2>Actualizar desde Excel</h2><p>Las piezas existentes se actualizan por número; las nuevas se agregan. Los duplicados del archivo no crean registros duplicados.</p><form method="post" enctype="multipart/form-data">{% csrf_token %}<input type="hidden" name="action" value="import">{{ import_form.as_p }}<div class="form-actions"><button type="submit">Importar universo</button></div></form></section>
+</div>
+<form class="filters panel" method="get"><label class="grow">Buscar<input type="search" name="q" value="{{ query }}" placeholder="Número, cliente, diámetro o descripción"></label><button type="submit">Filtrar</button><a class="button secondary" href="{% url 'universe' %}">Limpiar</a></form>
+<section class="panel table-wrap"><table><thead><tr><th>N.º de parte</th><th>Descripción</th><th>Cliente</th><th>Diámetro</th><th>Peso unitario</th></tr></thead><tbody>{% for part in parts %}<tr><td><b>{{ part.number }}</b></td><td>{{ part.description|default:'—' }}</td><td>{{ part.client.name|default:'—' }}</td><td>{{ part.diameter|default:'—' }}</td><td>{{ part.unit_weight_kg|default:'—' }}</td></tr>{% empty %}<tr><td colspan="5">No hay piezas en el universo.</td></tr>{% endfor %}</tbody></table></section>
+{% endblock %}

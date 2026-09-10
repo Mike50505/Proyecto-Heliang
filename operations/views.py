@@ -1,4 +1,5 @@
 import csv
+import re
 from hashlib import sha256
 from uuid import uuid4
 from io import BytesIO
@@ -24,9 +25,9 @@ from openpyxl.utils.exceptions import InvalidFileException
 from .access import module_required
 from .forms import (BulkProgramForm, CloseProductionForm, ProcessMovementForm,
                     ProductionOrderEditForm, ProgramOrderForm, StartProductionForm,
-                    SurplusMovementForm)
-from .models import (AuditEvent, Inventory, InventoryBucket, Machine, Movement, Process, ProductionClose,
-                     ProductionOrder, WorkInProcess, ProgramImportReceipt)
+                    SurplusMovementForm, UniverseImportForm, UniversePartForm)
+from .models import (AuditEvent, Client, Inventory, InventoryBucket, Machine, Movement, Part, Process,
+                     ProductionClose, ProductionOrder, WorkInProcess, ProgramImportReceipt)
 from .services import (close_production, create_program_order, move_process_material, move_surplus,
                        resolve_program_client, set_production_order_priority, start_production)
 
@@ -512,6 +513,94 @@ def surplus(request):
 def process_list(request):
     processes = Process.objects.filter(active=True).prefetch_related("machine_set")
     return render(request, "operations/process_list.html", {"processes": processes})
+
+
+@login_required
+@module_required("universe")
+def universe(request):
+    part_form = UniversePartForm(request.POST or None)
+    import_form = UniverseImportForm(request.POST or None, request.FILES or None)
+    if request.method == "POST" and request.POST.get("action") == "add" and part_form.is_valid():
+        part_form.save()
+        messages.success(request, "La pieza se agregÃ³ al Universo Ramos Arizpe.")
+        return redirect("universe")
+    if request.method == "POST" and request.POST.get("action") == "import" and import_form.is_valid():
+        try:
+            created, updated, skipped = _import_universe_workbook(import_form.cleaned_data["file"])
+        except (ValidationError, BadZipFile, InvalidFileException, KeyError) as exc:
+            import_form.add_error("file", exc)
+        else:
+            messages.success(request, f"Universo actualizado: {created} piezas nuevas, {updated} actualizadas y {skipped} filas omitidas.")
+            return redirect("universe")
+    query = request.GET.get("q", "").strip()
+    parts = Part.objects.select_related("client").order_by("number")
+    if query:
+        parts = parts.filter(Q(number__icontains=query) | Q(description__icontains=query) |
+                             Q(diameter__icontains=query) | Q(client__name__icontains=query))
+    return render(request, "operations/universe.html", {
+        "part_form": part_form, "import_form": import_form, "parts": parts[:1000], "query": query,
+    })
+
+
+def _universe_text(value):
+    return "" if value is None else str(value).strip()
+
+
+def _universe_key(value):
+    return re.sub(r"[^a-z0-9]", "", _universe_text(value).lower().replace("á", "a").replace("é", "e").replace("í", "i").replace("ó", "o").replace("ú", "u")).replace("ñ", "n")
+
+
+@transaction.atomic
+def _import_universe_workbook(upload):
+    workbook = load_workbook(upload, data_only=True, read_only=True)
+    sheet = workbook.active
+    header_row = None
+    columns = {}
+    for index, values in enumerate(sheet.iter_rows(min_row=1, max_row=10, values_only=True), 1):
+        keys = {_universe_key(value): position for position, value in enumerate(values)}
+        if any("numerodeparte" in key or "numpart" in key for key in keys):
+            header_row, columns = index, keys
+            break
+    if header_row is None:
+        workbook.close()
+        raise ValidationError("No se encontrÃ³ una columna de nÃºmero de parte en el Excel.")
+    def col(*names):
+        for name in names:
+            if name in columns:
+                return columns[name]
+        return None
+    part_col = col("numerodeparte", "numpart", "partnumber")
+    diameter_col = col("diametro", "diameter")
+    client_col = col("cliente", "customer")
+    external_col = col("id", "idcliente", "clienteid")
+    description_col = col("descripcion", "description")
+    created = updated = skipped = 0
+    for values in sheet.iter_rows(min_row=header_row + 1, values_only=True):
+        part_number = _universe_text(values[part_col] if part_col is not None and len(values) > part_col else "")
+        if not part_number or _universe_key(part_number) == "numerodeparte":
+            skipped += 1
+            continue
+        client_name = _universe_text(values[client_col] if client_col is not None and len(values) > client_col else "")
+        external_id = _universe_text(values[external_col] if external_col is not None and len(values) > external_col else "")
+        client = None
+        if client_name:
+            code = re.sub(r"[^A-Z0-9]+", "-", client_name.upper()).strip("-")[:30] or "SIN-CLIENTE"
+            client, _ = Client.objects.get_or_create(code=code, defaults={"name": client_name, "external_id": external_id})
+            changes = []
+            if client.name != client_name: client.name = client_name; changes.append("name")
+            if external_id and client.external_id != external_id: client.external_id = external_id; changes.append("external_id")
+            if changes: client.save(update_fields=[*changes, "updated_at"])
+        part, was_created = Part.objects.get_or_create(number=part_number, defaults={"client": client})
+        changes = []
+        diameter = _universe_text(values[diameter_col] if diameter_col is not None and len(values) > diameter_col else "")
+        description = _universe_text(values[description_col] if description_col is not None and len(values) > description_col else "")
+        if client and part.client_id != client.pk: part.client = client; changes.append("client")
+        if diameter and part.diameter != diameter: part.diameter = diameter; changes.append("diameter")
+        if description and part.description != description: part.description = description; changes.append("description")
+        if changes: part.save(update_fields=[*changes, "updated_at"])
+        created += int(was_created); updated += int(not was_created and bool(changes))
+    workbook.close()
+    return created, updated, skipped
 
 
 @login_required

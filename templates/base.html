@@ -7,5 +7,5 @@
 <button id="theme-toggle" class="theme-toggle" type="button"><span>☾</span><b>Modo oscuro</b></button>
 {% if user.is_authenticated %}
 <form method="post" action="{% url 'logout' %}">{% csrf_token %}<button class="link">Salir</button></form>{% endif %}</header>
-<main>{% for message in messages %}<div class="message {{ message.tags }}">{{ message }}</div>{% endfor %}{% block content %}{% endblock %}</main>
+<main>{% if user.is_authenticated and module_access.universe %}<div class="universe-shortcut"><a href="{% url 'universe' %}">Universo Ramos Arizpe</a></div>{% endif %}{% for message in messages %}<div class="message {{ message.tags }}">{{ message }}</div>{% endfor %}{% block content %}{% endblock %}</main>
 <footer>MESA · Sistema de control de inventario y producción</footer><script src="{% static 'js/theme.js' %}"></script></body></html>
