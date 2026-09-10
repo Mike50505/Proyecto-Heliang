@@ -1,5 +1,6 @@
 from decimal import Decimal
 from django import forms
+from django.db.models import Case, IntegerField, Value, When
 from .models import Machine, Part, Process, ProductionOrder, WorkInProcess
 
 
@@ -8,6 +9,12 @@ class OrderChoiceField(forms.ModelChoiceField):
         diameter = f" · diámetro {obj.part.diameter}" if obj.part.diameter else ""
         return (f"{obj.folio} · {obj.program} · {obj.part.number}{diameter}"
                 f" · saldo {obj.remaining_quantity}")
+
+
+    def label_from_instance(self, obj):
+        diameter = f" · diámetro {obj.part.diameter}" if obj.part.diameter else ""
+        priority = f"PRIORIDAD {obj.priority:02d} · " if obj.priority else ""
+        return f"{priority}{obj.folio} · {obj.program} · {obj.part.number}{diameter} · saldo {obj.remaining_quantity}"
 
 
 class WorkChoiceField(forms.ModelChoiceField):
@@ -130,7 +137,9 @@ class StartProductionForm(forms.Form):
     quantity = forms.DecimalField(label="Cantidad", min_value=0.001, decimal_places=3)
     def __init__(self, *args, **kwargs):
         super().__init__(*args, **kwargs)
-        self.fields["order"].queryset = ProductionOrder.objects.filter(status=ProductionOrder.Status.OPEN).select_related("part")
+        self.fields["order"].queryset = ProductionOrder.objects.filter(status=ProductionOrder.Status.OPEN).select_related("part").annotate(
+            priority_sort=Case(When(priority__isnull=True, then=Value(2147483647)), default="priority", output_field=IntegerField())
+        ).order_by("priority_sort", "required_date", "created_at")
         occupied = WorkInProcess.objects.filter(status=WorkInProcess.Status.ACTIVE).values("machine_id")
         self.fields["machine"].queryset = Machine.objects.filter(active=True).exclude(pk__in=occupied)
 
