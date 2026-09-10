@@ -13,6 +13,7 @@
   </label>
   <label>Requerida desde <input type="date" name="start" value="{{ start }}"></label>
   <label>Requerida hasta <input type="date" name="end" value="{{ end }}"></label>
+  <label class="priority-filter"><input type="checkbox" name="priority" value="1" {% if priority_only %}checked{% endif %}> Solo prioridades</label>
   <button type="submit">Filtrar</button>
   <a class="button secondary" href="{% url 'order-list' %}">Limpiar</a>
 </form>

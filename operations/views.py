@@ -51,6 +51,7 @@ def order_list(request):
     status = request.GET.get("status", "").strip()
     start = _valid_date(request.GET.get("start"))
     end = _valid_date(request.GET.get("end"))
+    priority_only = request.GET.get("priority") == "1"
     if query:
         orders = orders.filter(
             Q(folio__icontains=query) | Q(program__icontains=query) |
@@ -65,8 +66,11 @@ def order_list(request):
         orders = orders.filter(required_date__gte=start)
     if end:
         orders = orders.filter(required_date__lte=end)
+    if priority_only:
+        orders = orders.filter(priority__isnull=False)
     return render(request, "operations/order_list.html", {
         "orders": orders.order_by("-created_at")[:500], "query": query, "status": status,
+        "priority_only": priority_only,
         "start": start.isoformat() if start else "", "end": end.isoformat() if end else "",
         "status_choices": ProductionOrder.Status.choices,
     })
@@ -380,6 +384,8 @@ def bulk_load_program(request):
                     messages.info(request, "Esta carga ya fue confirmada. Para una nueva producción, "
                                   "selecciona el archivo y genera otra vista previa.")
                     return redirect("order-list")
+                checked_rows = [row["row_number"] for row in payload["rows"]
+                                if request.POST.get(f"priority_check_{row['row_number']}") in {"1", "on", "true"}]
                 for row in payload["rows"]:
                     client = resolve_program_client(client_reference=row["reference"],
                                                     part_number=row["part_number"])
@@ -387,7 +393,8 @@ def bulk_load_program(request):
                         raise ValidationError("Cambió el cliente de una fila. Genera otra vista previa.")
                     raw_priority = request.POST.get(f"priority_{row['row_number']}", "").strip()
                     try:
-                        priority = int(raw_priority) if raw_priority else None
+                        priority = (checked_rows.index(row["row_number"]) + 1
+                                    if row["row_number"] in checked_rows else (int(raw_priority) if raw_priority else None))
                     except (TypeError, ValueError):
                         raise ValidationError(f"La prioridad de la fila {row['row_number']} debe ser un entero mayor que cero.")
                     if priority is not None and priority < 1:

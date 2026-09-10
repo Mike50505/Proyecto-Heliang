@@ -26,6 +26,8 @@
 .priority-input { width:58px; padding:6px 7px; text-align:center; font-weight:800; }
 .priority-save-state { min-width:44px; color:var(--green); font-size:10px; font-weight:700; }
 .priority-option { color:#a15d08; font-weight:800; background:#fff2d7; }
+.priority-filter { display:flex; align-items:center; gap:6px; white-space:nowrap; }
+.priority-filter input { width:auto; }
 .board-column.active { border-top:4px solid var(--cyan); }
 .board-column.active tbody tr { background:#dff4fb !important; box-shadow:inset 5px 0 0 var(--cyan); }
 .board-column.active tbody tr td { color:#16445d; }

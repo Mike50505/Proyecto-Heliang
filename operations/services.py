@@ -100,7 +100,18 @@ def create_program_order(*, client_name, part_number, program, quantity, employe
                               entity_id=order.folio,
                               data={"program": order.program, "part": part.number,
                                     "quantity": str(quantity)})
+    if priority is not None:
+        normalize_priorities()
     return order
+
+
+@transaction.atomic
+def normalize_priorities():
+    prioritized = list(ProductionOrder.objects.select_for_update().filter(
+        priority__isnull=False).order_by("priority", "id"))
+    for number, item in enumerate(prioritized, 1):
+        if item.priority != number:
+            ProductionOrder.objects.filter(pk=item.pk).update(priority=number)
 
 
 @transaction.atomic
@@ -123,6 +134,7 @@ def set_production_order_priority(*, order, priority, user=None):
             ProductionOrder.objects.select_for_update().filter(priority__gt=old, priority__lte=priority).exclude(pk=current.pk).update(priority=F("priority") - 1)
     current.priority = priority
     current.save(update_fields=["priority", "updated_at"])
+    normalize_priorities()
     AuditEvent.objects.create(user=user, action="EDIT_PRIORITY", entity="ProductionOrder",
                               entity_id=current.folio, data={"priority": priority, "previous": old})
     return current
