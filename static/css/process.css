@@ -29,6 +29,8 @@
 .board-column.active { border-top:4px solid var(--cyan); }
 .board-column.active tbody tr { background:#dff4fb !important; box-shadow:inset 5px 0 0 var(--cyan); }
 .board-column.active tbody tr td { color:#16445d; }
+.board-column.active tbody tr { background:transparent !important; box-shadow:none; }
+.board-column.active tbody tr.priority-row { background:#dff4fb !important; box-shadow:inset 5px 0 0 var(--cyan); }
 .heliang-hero { display:flex; align-items:center; justify-content:space-between; gap:25px; color:#fff; padding:27px 30px; border-radius:15px; background:linear-gradient(115deg,#10283f,#106b83); margin-bottom:16px; }
 .heliang-hero h1 { font-size:32px; margin:0 0 7px; }
 .heliang-hero p { margin:0; color:#cce4eb; }
@@ -54,8 +56,9 @@
 .start-card { border-top:4px solid var(--cyan); }
 .close-card { border-top:4px solid var(--amber); }
 .close-card button { background:var(--amber); }
-.heliang-board { display:grid; grid-template-columns:minmax(0,1fr); gap:16px; }
+.heliang-board { display:grid; grid-template-columns:minmax(0,1fr) minmax(0,1fr); gap:16px; }
 .heliang-board .board-column { width:100%; }
+main:has(.heliang-hero), main:has(.order-selection-table) { max-width:1850px; }
 .board-column { min-width:0; background:#fff; border:1px solid var(--line); border-radius:12px; overflow:hidden; }
 .board-title { display:flex; align-items:center; justify-content:space-between; gap:12px; padding:18px 20px; }
 .board-title h2,.board-title p { margin:0; }

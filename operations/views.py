@@ -646,6 +646,7 @@ def heliang(request):
     return render(request, "operations/heliang.html", {
         "start_form": start_form, "close_form": close_form, "open_orders": open_orders,
         "priority_orders": priority_orders,
+        "priority_keys": list(ProductionOrder.objects.filter(priority__isnull=False).values_list("program", "part__number")),
         "order_balances": {str(order.pk): str(order.remaining_quantity) for order in open_orders},
         "active_items": active_items, "recent_closes": recent_closes,
         "machine_rows": machine_rows, "selected_order": selected_order,
