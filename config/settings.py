@@ -26,6 +26,14 @@ if not DEBUG and SECRET_KEY in {"", "dev-only-change-me", "local-only-change-me"
 
 # Same-origin requests need no extra trusted origins, including direct Tailscale HTTP.
 CSRF_TRUSTED_ORIGINS = env_list("DJANGO_CSRF_TRUSTED_ORIGINS")
+SECURE_SSL = env_bool("DJANGO_SECURE_SSL", default=False)
+SESSION_COOKIE_SECURE = SECURE_SSL
+CSRF_COOKIE_SECURE = SECURE_SSL
+SECURE_SSL_REDIRECT = SECURE_SSL
+SECURE_HSTS_SECONDS = int(os.getenv("DJANGO_SECURE_HSTS_SECONDS", "31536000" if SECURE_SSL else "0"))
+SECURE_HSTS_INCLUDE_SUBDOMAINS = SECURE_SSL
+SECURE_HSTS_PRELOAD = SECURE_SSL
+SECURE_PROXY_SSL_HEADER = ("HTTP_X_FORWARDED_PROTO", "https")
 
 INSTALLED_APPS = [
     "django.contrib.admin", "django.contrib.auth", "django.contrib.contenttypes",
@@ -74,3 +82,5 @@ LOGIN_REDIRECT_URL = "dashboard"
 LOGOUT_REDIRECT_URL = "login"
 AUTHENTICATION_BACKENDS = ["operations.backends.CaseInsensitiveModelBackend"]
 DEFAULT_AUTO_FIELD = "django.db.models.BigAutoField"
+DATA_UPLOAD_MAX_MEMORY_SIZE = 2 * 1024 * 1024
+FILE_UPLOAD_MAX_MEMORY_SIZE = 2 * 1024 * 1024

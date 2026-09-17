@@ -1,7 +1,52 @@
 from decimal import Decimal
+from datetime import timedelta
+from hashlib import sha256
 from django import forms
+from django.contrib.auth.forms import AuthenticationForm
+from django.db import transaction
 from django.db.models import Case, IntegerField, Value, When
-from .models import Client, Machine, Part, Process, ProductionOrder, WorkInProcess
+from django.utils import timezone
+from .models import (Client, LoginThrottle, Machine, Part, Process,
+                     ProductionOrder, WorkInProcess)
+
+
+class ThrottledAuthenticationForm(AuthenticationForm):
+    max_attempts = 5
+    window = timedelta(minutes=15)
+
+    def _key(self):
+        username = str(self.data.get("username", "")).strip().casefold()
+        address = self.request.META.get("REMOTE_ADDR", "") if self.request else ""
+        return sha256(f"login:{address}\0{username}".encode()).hexdigest()
+
+    def clean(self):
+        key = self._key()
+        now = timezone.now()
+        with transaction.atomic():
+            throttle, _ = LoginThrottle.objects.select_for_update().get_or_create(
+                key=key, defaults={"window_started_at": now})
+            if throttle.blocked_until and throttle.blocked_until > now:
+                raise forms.ValidationError(
+                    "Demasiados intentos. Espera 15 minutos antes de volver a intentar.",
+                    code="login_throttled",
+                )
+        try:
+            cleaned = super().clean()
+        except forms.ValidationError:
+            with transaction.atomic():
+                throttle = LoginThrottle.objects.select_for_update().get(key=key)
+                if now - throttle.window_started_at >= self.window:
+                    throttle.attempts = 1
+                    throttle.window_started_at = now
+                    throttle.blocked_until = None
+                else:
+                    throttle.attempts += 1
+                    if throttle.attempts >= self.max_attempts:
+                        throttle.blocked_until = now + self.window
+                throttle.save(update_fields=["attempts", "window_started_at", "blocked_until"])
+            raise
+        LoginThrottle.objects.filter(key=key).delete()
+        return cleaned
 
 
 class OrderChoiceField(forms.ModelChoiceField):
@@ -61,15 +106,13 @@ class ProductionOrderEditForm(forms.ModelForm):
                 f"La cantidad no puede ser menor que {self.committed_quantity:g}; esa cantidad ya fue asignada.")
         return quantity
 
-    def save(self, commit=True):
-        order = super().save(commit=False)
-        order.remaining_quantity = order.quantity - self.committed_quantity
-        if order.status != ProductionOrder.Status.CANCELLED:
-            order.status = (ProductionOrder.Status.COMPLETE if order.remaining_quantity == 0
-                            else ProductionOrder.Status.OPEN)
-        if commit:
-            order.save()
-        return order
+    def clean_part(self):
+        part = self.cleaned_data["part"]
+        if (self.instance.pk and part.pk != self.instance.part_id and
+                self.instance.work_items.exists()):
+            raise forms.ValidationError(
+                "No se puede cambiar la pieza de una orden que ya tiene producción.")
+        return part
 
 class BulkProgramForm(forms.Form):
     file = forms.FileField(label="Archivo Excel (.xlsx)",

@@ -2,6 +2,7 @@ from decimal import Decimal
 from django.conf import settings
 from django.core.validators import MinValueValidator
 from django.db import models
+from django.db.models import Q
 
 
 class TimeStamped(models.Model):
@@ -49,6 +50,12 @@ class Inventory(TimeStamped):
     surplus = models.DecimalField(max_digits=14, decimal_places=3, default=0)
     real = models.DecimalField(max_digits=14, decimal_places=3, default=0)
 
+    class Meta:
+        constraints = [
+            models.CheckConstraint(condition=Q(surplus__gte=0), name="inventory_surplus_nonnegative"),
+            models.CheckConstraint(condition=Q(real__gte=0), name="inventory_real_nonnegative"),
+        ]
+
 
 class InventoryBucket(TimeStamped):
     inventory = models.ForeignKey(Inventory, on_delete=models.CASCADE, related_name="buckets")
@@ -56,12 +63,16 @@ class InventoryBucket(TimeStamped):
     name = models.CharField(max_length=100)
     quantity = models.DecimalField(max_digits=14, decimal_places=3, default=0)
     class Meta:
-        constraints = [models.UniqueConstraint(fields=["inventory", "kind", "name"], name="uq_inventory_bucket")]
+        constraints = [
+            models.UniqueConstraint(fields=["inventory", "kind", "name"], name="uq_inventory_bucket"),
+            models.CheckConstraint(condition=Q(quantity__gte=0), name="bucket_quantity_nonnegative"),
+        ]
 
 
 class ProductionOrder(TimeStamped):
     class Status(models.TextChoices):
         OPEN = "OPEN", "Abierta"
+        ALLOCATED = "ALLOCATED", "Asignada"
         COMPLETE = "COMPLETE", "Completada"
         CANCELLED = "CANCELLED", "Cancelada"
     folio = models.CharField(max_length=40, unique=True)
@@ -76,6 +87,13 @@ class ProductionOrder(TimeStamped):
     loaded_by = models.ForeignKey(settings.AUTH_USER_MODEL, null=True, blank=True, on_delete=models.SET_NULL)
     legacy_id = models.CharField(max_length=80, blank=True, db_index=True)
     def __str__(self): return self.folio
+
+    class Meta:
+        constraints = [
+            models.CheckConstraint(condition=Q(quantity__gt=0), name="order_quantity_positive"),
+            models.CheckConstraint(condition=Q(remaining_quantity__gte=0), name="order_remaining_nonnegative"),
+            models.CheckConstraint(condition=Q(remaining_quantity__lte=models.F("quantity")), name="order_remaining_lte_quantity"),
+        ]
 
 
 class WorkInProcess(TimeStamped):
@@ -92,6 +110,18 @@ class WorkInProcess(TimeStamped):
     started_by = models.ForeignKey(settings.AUTH_USER_MODEL, null=True, on_delete=models.SET_NULL, related_name="started_work")
     legacy_id = models.CharField(max_length=80, blank=True, db_index=True)
 
+    class Meta:
+        constraints = [
+            models.UniqueConstraint(
+                fields=["machine"],
+                condition=Q(status="ACTIVE"),
+                name="uq_active_work_per_machine",
+            ),
+            models.CheckConstraint(condition=Q(initial_quantity__gt=0), name="work_initial_positive"),
+            models.CheckConstraint(condition=Q(remaining_quantity__gte=0), name="work_remaining_nonnegative"),
+            models.CheckConstraint(condition=Q(remaining_quantity__lte=models.F("initial_quantity")), name="work_remaining_lte_initial"),
+        ]
+
 
 class ProductionClose(TimeStamped):
     folio = models.CharField(max_length=40, unique=True)
@@ -103,6 +133,12 @@ class ProductionClose(TimeStamped):
     comment = models.TextField(blank=True)
     closed_by = models.ForeignKey(settings.AUTH_USER_MODEL, null=True, on_delete=models.SET_NULL, related_name="production_closes")
     legacy_id = models.CharField(max_length=80, blank=True, db_index=True)
+
+    class Meta:
+        constraints = [
+            models.CheckConstraint(condition=Q(quantity__gt=0), name="close_quantity_positive"),
+            models.CheckConstraint(condition=Q(weight_kg__gte=0), name="close_weight_nonnegative"),
+        ]
 
 
 class Movement(TimeStamped):
@@ -129,6 +165,27 @@ class ProgramImportReceipt(models.Model):
     fingerprint = models.CharField(max_length=64, unique=True)
 
 
+class FolioCounter(models.Model):
+    """Serializes folio allocation independently from business rows."""
+    key = models.CharField(max_length=100, unique=True)
+    next_value = models.PositiveBigIntegerField(default=1)
+
+
+class ProgramImportPreview(models.Model):
+    token = models.UUIDField(unique=True, editable=False)
+    user = models.ForeignKey(settings.AUTH_USER_MODEL, on_delete=models.CASCADE)
+    payload = models.JSONField()
+    expires_at = models.DateTimeField(db_index=True)
+    confirmed_at = models.DateTimeField(null=True, blank=True)
+
+
+class LoginThrottle(models.Model):
+    key = models.CharField(max_length=64, unique=True)
+    attempts = models.PositiveSmallIntegerField(default=0)
+    window_started_at = models.DateTimeField()
+    blocked_until = models.DateTimeField(null=True, blank=True)
+
+
 class AuditEvent(models.Model):
     created_at = models.DateTimeField(auto_now_add=True)
     user = models.ForeignKey(settings.AUTH_USER_MODEL, null=True, on_delete=models.SET_NULL)
@@ -150,7 +207,9 @@ class ModuleAccess(models.Model):
     surplus = models.BooleanField("material sobrante", default=False)
     process_material = models.BooleanField("material en proceso", default=False)
     reports = models.BooleanField("reportes", default=False)
-    universe = models.BooleanField("Universo Ramos Arizpe", default=True)
+    universe = models.BooleanField("consultar Universo Ramos Arizpe", default=False)
+    universe_edit = models.BooleanField("editar Universo Ramos Arizpe", default=False)
+    universe_import = models.BooleanField("importar Universo Ramos Arizpe", default=False)
     line_dashboard = models.BooleanField("tablero visual de línea", default=False)
 
     class Meta:

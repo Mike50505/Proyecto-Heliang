@@ -6,7 +6,8 @@ from django.shortcuts import redirect
 
 
 MODULES = ("program_loading", "heliang", "inventory", "surplus",
-           "process_material", "reports", "line_dashboard", "universe")
+           "process_material", "reports", "line_dashboard", "universe",
+           "universe_edit", "universe_import")
 
 
 def access_for(user):

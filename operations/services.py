@@ -5,9 +5,9 @@ from django.core.exceptions import ValidationError
 from django.db import transaction
 from django.db.models import F
 from django.utils import timezone
-from hashlib import sha256
 from .models import (AuditEvent, Client, Inventory, InventoryBucket, Movement, Part,
-                     ProductionClose, ProductionOrder, WorkInProcess, ProgramImportReceipt)
+                     ProductionClose, ProductionOrder, WorkInProcess, FolioCounter,
+                     Machine)
 
 SHIFT_B_START = time(16, 36)
 SHIFT_A_START = time(6, 0)
@@ -18,29 +18,76 @@ def next_folio(model, prefix, moment=None):
     moment = moment or timezone.localtime()
     date_key = moment.strftime("%d%m%Y")
     base = f"{prefix}{date_key}-"
-    historical_folios = set()
-    if model is ProductionOrder:
-        # Serialize allocation until the caller's order transaction commits.
-        lock_key = sha256(f"folio-lock:{base}".encode()).hexdigest()
-        ProgramImportReceipt.objects.get_or_create(fingerprint=lock_key)
-        ProgramImportReceipt.objects.select_for_update().get(fingerprint=lock_key)
+    counter, created = FolioCounter.objects.select_for_update().get_or_create(
+        key=f"{model._meta.label_lower}:{base}", defaults={"next_value": 1})
+    sequence = counter.next_value
+    if created:
         historical_folios = set(AuditEvent.objects.filter(
             entity="ProductionOrder", entity_id__startswith=base
-        ).values_list("entity_id", flat=True))
-    latest = model.objects.select_for_update().filter(folio__startswith=base).order_by("-id").first()
-    sequence = 1
-    if latest:
-        match = re.search(r"-(\d+)$", latest.folio)
-        sequence = int(match.group(1)) + 1 if match else latest.pk + 1
-    for folio in historical_folios:
-        suffix = folio[len(base):]
-        if suffix.isdigit():
-            sequence = max(sequence, int(suffix) + 1)
+        ).values_list("entity_id", flat=True)) if model is ProductionOrder else set()
+        existing_folios = model.objects.filter(
+            folio__startswith=base).values_list("folio", flat=True)
+        for folio in [*existing_folios, *historical_folios]:
+            suffix = folio[len(base):]
+            if suffix.isdigit():
+                sequence = max(sequence, int(suffix) + 1)
     candidate = f"{base}{sequence}"
     while model.objects.filter(folio=candidate).exists():
         sequence += 1
         candidate = f"{base}{sequence}"
+    counter.next_value = sequence + 1
+    counter.save(update_fields=["next_value"])
     return candidate
+
+
+def _acquire_named_lock(key):
+    lock, _ = FolioCounter.objects.select_for_update().get_or_create(
+        key=f"lock:{key}", defaults={"next_value": 1})
+    return lock
+
+
+@transaction.atomic
+def edit_production_order(*, order_id, program, part, quantity, required_date=None,
+                          line="", priority=None, user=None):
+    order = ProductionOrder.objects.select_for_update().get(pk=order_id)
+    quantity = Decimal(quantity)
+    committed_quantity = order.quantity - order.remaining_quantity
+    has_production = order.work_items.exists()
+    if has_production and part.pk != order.part_id:
+        raise ValidationError("No se puede cambiar la pieza de una orden que ya tiene producción.")
+    if quantity < committed_quantity:
+        raise ValidationError(
+            f"La cantidad no puede ser menor que {committed_quantity:g}; "
+            "esa cantidad ya fue asignada.")
+
+    previous_priority = order.priority
+    order.program = program.strip()
+    order.part = part
+    order.quantity = quantity
+    order.remaining_quantity = quantity - committed_quantity
+    order.required_date = required_date
+    order.line = line.strip()
+    order.priority = priority
+    if order.status != ProductionOrder.Status.CANCELLED:
+        if order.remaining_quantity > 0:
+            order.status = ProductionOrder.Status.OPEN
+        elif order.work_items.filter(status=WorkInProcess.Status.ACTIVE).exists():
+            order.status = ProductionOrder.Status.ALLOCATED
+        else:
+            order.status = ProductionOrder.Status.COMPLETE
+    order.save()
+    Movement.objects.filter(
+        folio=order.folio, movement_type=Movement.Type.PROGRAM
+    ).update(part=order.part, destination=order.program, program=order.program,
+             quantity=order.quantity)
+    AuditEvent.objects.create(
+        user=user, action="EDIT_PROGRAM", entity="ProductionOrder",
+        entity_id=order.folio,
+        data={"program": order.program, "part": order.part.number,
+              "quantity": str(order.quantity)})
+    if previous_priority != priority:
+        normalize_priorities()
+    return order
 
 
 def resolve_program_client(*, client_reference, part_number):
@@ -82,9 +129,11 @@ def create_program_order(*, client_name, part_number, program, quantity, employe
         client, _ = Client.objects.get_or_create(code=client_code, defaults={"name": client_name})
     part, _ = Part.objects.get_or_create(number=part_number.strip(), defaults={"client": client})
     if part.client_id != client.pk:
-        part.client = client
-        part.save(update_fields=["client", "updated_at"])
+        raise ValidationError(
+            f"La pieza {part.number} pertenece a otro cliente. "
+            "Corrige el catálogo antes de cargar la orden.")
     if priority is not None:
+        _acquire_named_lock("production-order-priorities")
         ProductionOrder.objects.select_for_update().filter(priority__gte=int(priority)).update(priority=F("priority") + 1)
     order = ProductionOrder.objects.create(
         folio=next_folio(ProductionOrder, "O"), program=program.strip(), part=part,
@@ -118,6 +167,7 @@ def normalize_priorities():
 def set_production_order_priority(*, order, priority, user=None):
     if priority is not None and int(priority) < 1:
         raise ValidationError("La prioridad debe ser un entero mayor que cero.")
+    _acquire_named_lock("production-order-priorities")
     current = ProductionOrder.objects.select_for_update().get(pk=order.pk)
     old = current.priority
     priority = int(priority) if priority is not None else None
@@ -138,6 +188,29 @@ def set_production_order_priority(*, order, priority, user=None):
     AuditEvent.objects.create(user=user, action="EDIT_PRIORITY", entity="ProductionOrder",
                               entity_id=current.folio, data={"priority": priority, "previous": old})
     return current
+
+
+@transaction.atomic
+def delete_production_orders(*, order_ids, user=None, source="single"):
+    orders = list(ProductionOrder.objects.select_for_update().filter(
+        pk__in=order_ids).order_by("pk"))
+    programs_with_material = set(InventoryBucket.objects.select_for_update().filter(
+        kind="PROGRAM", name__in={order.program for order in orders}, quantity__gt=0
+    ).values_list("name", flat=True))
+    deletable = []
+    for order in orders:
+        if order.work_items.exists() or order.program in programs_with_material:
+            continue
+        deletable.append(order)
+    for order in deletable:
+        folio = order.folio
+        Movement.objects.filter(
+            folio=folio, movement_type=Movement.Type.PROGRAM).delete()
+        order.delete()
+        AuditEvent.objects.create(
+            user=user, action="DELETE_PROGRAM", entity="ProductionOrder",
+            entity_id=folio, data={"source": source})
+    return len(deletable), len(orders) - len(deletable)
 
 
 @transaction.atomic
@@ -201,10 +274,13 @@ def move_process_material(*, part, source_process, destination_process, program,
 def start_production(*, order, machine, quantity, employee=None, user=None, when=None):
     when = when or timezone.now()
     order = ProductionOrder.objects.select_for_update().get(pk=order.pk)
+    machine = Machine.objects.select_for_update().get(pk=machine.pk)
     quantity = Decimal(quantity)
     if order.status != ProductionOrder.Status.OPEN or quantity <= 0 or quantity > order.remaining_quantity:
         raise ValidationError("La cantidad debe ser positiva y no superar el saldo abierto.")
-    if WorkInProcess.objects.select_for_update().filter(machine=machine, status=WorkInProcess.Status.ACTIVE).exists():
+    if not machine.active:
+        raise ValidationError("La máquina seleccionada no está activa.")
+    if WorkInProcess.objects.filter(machine=machine, status=WorkInProcess.Status.ACTIVE).exists():
         raise ValidationError("La máquina seleccionada ya está ocupada.")
     work = WorkInProcess.objects.create(
         folio=next_folio(WorkInProcess, "P", when), order=order, machine=machine,
@@ -212,7 +288,7 @@ def start_production(*, order, machine, quantity, employee=None, user=None, when
     )
     order.remaining_quantity -= quantity
     if order.remaining_quantity == 0:
-        order.status = ProductionOrder.Status.COMPLETE
+        order.status = ProductionOrder.Status.ALLOCATED
     order.save(update_fields=["remaining_quantity", "status", "updated_at"])
     AuditEvent.objects.create(user=user, action="START_PRODUCTION", entity="WorkInProcess", entity_id=work.folio,
         data={"order": order.folio, "machine": machine.code, "quantity": str(quantity)})
@@ -250,6 +326,12 @@ def close_production(*, work_item, quantity, employee=None, user=None, comment="
             user=user, action="RELEASE_PRODUCTION", entity="WorkInProcess", entity_id=work.folio,
             data={"order": order.folio, "released_quantity": str(released),
                   "machine": work.machine.code})
+    else:
+        order = ProductionOrder.objects.select_for_update().get(pk=work.order_id)
+        if (order.remaining_quantity == 0 and
+                not order.work_items.filter(status=WorkInProcess.Status.ACTIVE).exists()):
+            order.status = ProductionOrder.Status.COMPLETE
+            order.save(update_fields=["status", "updated_at"])
     AuditEvent.objects.create(user=user, action="CLOSE_PRODUCTION", entity="ProductionClose", entity_id=close.folio,
         data={"work_item": work.folio, "quantity": str(quantity), "weight_kg": str(close.weight_kg)})
     return close

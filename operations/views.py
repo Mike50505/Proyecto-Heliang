@@ -1,6 +1,5 @@
 import csv
 import re
-from hashlib import sha256
 from uuid import uuid4
 from io import BytesIO
 from zipfile import BadZipFile
@@ -9,7 +8,6 @@ from decimal import Decimal, InvalidOperation
 from django.contrib import messages
 from django.contrib.auth.decorators import login_required
 from django.core.exceptions import ValidationError
-from django.core import signing
 from django.db import transaction
 from django.db.models import Case, Count, IntegerField, Max, Q, Sum, Value, When
 from django.db.models.functions import TruncDate
@@ -22,14 +20,16 @@ from openpyxl.styles import Alignment, Font, PatternFill
 from openpyxl.utils.datetime import to_excel
 from openpyxl.worksheet.datavalidation import DataValidation
 from openpyxl.utils.exceptions import InvalidFileException
-from .access import module_required
+from .access import access_for, module_required
 from .forms import (BulkProgramForm, CloseProductionForm, ProcessMovementForm,
                     ProductionOrderEditForm, ProgramOrderForm, StartProductionForm,
                     SurplusMovementForm, UniverseImportForm, UniversePartForm)
 from .models import (AuditEvent, Client, Inventory, InventoryBucket, Machine, Movement, Part, Process,
-                     ProductionClose, ProductionOrder, WorkInProcess, ProgramImportReceipt)
+                     ProductionClose, ProductionOrder, WorkInProcess, ProgramImportPreview)
+from .security import MAX_XLSX_ROWS, spreadsheet_safe, validate_xlsx_archive
 from .services import (close_production, create_program_order, move_process_material, move_surplus,
-                       resolve_program_client, set_production_order_priority, start_production)
+                       delete_production_orders, edit_production_order, resolve_program_client,
+                       set_production_order_priority, start_production)
 
 
 @login_required
@@ -90,18 +90,14 @@ def edit_order(request, pk):
     order = get_object_or_404(ProductionOrder.objects.select_related("part"), pk=pk)
     form = ProductionOrderEditForm(request.POST or None, instance=order)
     if request.method == "POST" and form.is_valid():
-        with transaction.atomic():
-            order = form.save()
-            Movement.objects.filter(
-                folio=order.folio, movement_type=Movement.Type.PROGRAM
-            ).update(part=order.part, destination=order.program, program=order.program,
-                     quantity=order.quantity)
-            AuditEvent.objects.create(
-                user=request.user, action="EDIT_PROGRAM", entity="ProductionOrder",
-                entity_id=order.folio, data={"program": order.program,
-                                             "quantity": str(order.quantity)})
-        messages.success(request, f"La orden {order.folio} fue actualizada.")
-        return redirect("order-list")
+        try:
+            order = edit_production_order(
+                order_id=order.pk, user=request.user, **form.cleaned_data)
+        except ValidationError as exc:
+            form.add_error(None, exc)
+        else:
+            messages.success(request, f"La orden {order.folio} fue actualizada.")
+            return redirect("order-list")
     return render(request, "operations/form.html", {
         "form": form, "title": f"Editar orden {order.folio}", "button": "Guardar cambios",
     })
@@ -136,16 +132,12 @@ def delete_order(request, pk):
         kind="PROGRAM", name=order.program, quantity__gt=0).exists()
     blocked = has_production or has_material
     if request.method == "POST":
-        if blocked:
+        deleted, blocked_count = delete_production_orders(
+            order_ids=[order.pk], user=request.user, source="single")
+        if blocked_count:
             messages.error(request, "No se puede eliminar una orden con producción o material asociado.")
             return redirect("order-list")
-        folio = order.folio
-        with transaction.atomic():
-            Movement.objects.filter(folio=folio, movement_type=Movement.Type.PROGRAM).delete()
-            order.delete()
-            AuditEvent.objects.create(user=request.user, action="DELETE_PROGRAM",
-                                      entity="ProductionOrder", entity_id=folio)
-        messages.success(request, f"La orden {folio} fue eliminada.")
+        messages.success(request, f"La orden {order.folio} fue eliminada.")
         return redirect("order-list")
     return render(request, "operations/order_confirm_delete.html", {
         "order": order, "blocked": blocked,
@@ -171,31 +163,11 @@ def bulk_delete_orders(request):
         messages.error(request, "Solo se pueden eliminar hasta 500 filas a la vez.")
         return redirect("order-list")
 
-    orders = list(ProductionOrder.objects.filter(pk__in=selected_ids).prefetch_related("work_items"))
-    programs_with_material = set(InventoryBucket.objects.filter(
-        kind="PROGRAM", name__in={order.program for order in orders}, quantity__gt=0
-    ).values_list("name", flat=True))
-    deletable = [
-        order for order in orders
-        if not order.work_items.exists() and order.program not in programs_with_material
-    ]
-    blocked_count = len(orders) - len(deletable)
+    deleted_count, blocked_count = delete_production_orders(
+        order_ids=selected_ids, user=request.user, source="bulk_selection")
 
-    with transaction.atomic():
-        for order in deletable:
-            folio = order.folio
-            Movement.objects.filter(
-                folio=folio, movement_type=Movement.Type.PROGRAM
-            ).delete()
-            order.delete()
-            AuditEvent.objects.create(
-                user=request.user, action="DELETE_PROGRAM",
-                entity="ProductionOrder", entity_id=folio,
-                data={"source": "bulk_selection"},
-            )
-
-    if deletable:
-        messages.success(request, f"Se eliminaron {len(deletable)} órdenes seleccionadas.")
+    if deleted_count:
+        messages.success(request, f"Se eliminaron {deleted_count} órdenes seleccionadas.")
     if blocked_count:
         messages.error(request, (
             f"No se eliminaron {blocked_count} órdenes porque tienen producción "
@@ -210,14 +182,18 @@ def load_program(request):
     form = ProgramOrderForm(request.POST or None)
     if request.method == "POST" and form.is_valid():
         employee = request.user
-        order = create_program_order(
-            client_name=form.cleaned_data["client"], part_number=form.cleaned_data["part_number"],
-            program=form.cleaned_data["program"], quantity=form.cleaned_data["quantity"],
-            required_date=form.cleaned_data["required_date"], line=form.cleaned_data["line"],
-            priority=form.cleaned_data["priority"],
-            comment=form.cleaned_data["comment"], employee=employee, user=request.user)
-        messages.success(request, f"Programa cargado correctamente con el folio {order.folio}.")
-        return redirect("order-list")
+        try:
+            order = create_program_order(
+                client_name=form.cleaned_data["client"], part_number=form.cleaned_data["part_number"],
+                program=form.cleaned_data["program"], quantity=form.cleaned_data["quantity"],
+                required_date=form.cleaned_data["required_date"], line=form.cleaned_data["line"],
+                priority=form.cleaned_data["priority"],
+                comment=form.cleaned_data["comment"], employee=employee, user=request.user)
+        except ValidationError as exc:
+            form.add_error(None, exc)
+        else:
+            messages.success(request, f"Programa cargado correctamente con el folio {order.folio}.")
+            return redirect("order-list")
     return render(request, "operations/program_load.html", {"form": form, "active_tab": "single"})
 
 
@@ -307,11 +283,11 @@ def download_program_template(request):
 @module_required("program_loading")
 def download_completed_programs(request):
     orders = ProductionOrder.objects.filter(
-        Q(status=ProductionOrder.Status.COMPLETE) | Q(remaining_quantity=0)
+        status=ProductionOrder.Status.COMPLETE
     ).select_related("part", "part__client").annotate(
         completed_quantity=Sum("work_items__closes__quantity"),
         last_close=Max("work_items__closes__closed_at"),
-    ).order_by("program", "part__client__name", "part__number")
+    ).order_by("program", "part__client__name", "part__number")[:10000]
 
     workbook = Workbook()
     sheet = workbook.active
@@ -337,8 +313,10 @@ def download_completed_programs(request):
         if last_close and timezone.is_aware(last_close):
             last_close = timezone.localtime(last_close).replace(tzinfo=None)
         sheet.append([
-            order.program, order.folio, client.external_id if client else "",
-            client.name if client else "", order.part.number, order.quantity,
+            spreadsheet_safe(order.program), spreadsheet_safe(order.folio),
+            spreadsheet_safe(client.external_id if client else ""),
+            spreadsheet_safe(client.name if client else ""),
+            spreadsheet_safe(order.part.number), order.quantity,
             completed, order.remaining_quantity, order.required_date, order.line,
             order.get_status_display(), last_close,
         ])
@@ -371,20 +349,18 @@ def bulk_load_program(request):
     if request.method == "POST" and request.POST.get("action") == "confirm":
         form = BulkProgramForm(request.POST)
         try:
-            payload = signing.loads(request.POST.get("preview_token", ""),
-                                    salt="program-preview-v2", max_age=1800)
-            if payload["user"] != request.user.pk:
-                raise signing.BadSignature("Usuario incorrecto")
             added = 0
             with transaction.atomic():
-                # Only a repeated confirmation is a duplicate. A new upload,
-                # even of an identical file, is a new production batch.
-                receipt_key = sha256(f"batch:{payload['batch_id']}".encode()).hexdigest()
-                _, first_confirmation = ProgramImportReceipt.objects.get_or_create(fingerprint=receipt_key)
-                if not first_confirmation:
+                preview_record = ProgramImportPreview.objects.select_for_update().get(
+                    token=request.POST.get("preview_token", ""), user=request.user)
+                if preview_record.confirmed_at:
                     messages.info(request, "Esta carga ya fue confirmada. Para una nueva producción, "
                                   "selecciona el archivo y genera otra vista previa.")
                     return redirect("order-list")
+                if preview_record.expires_at <= timezone.now():
+                    raise ValidationError(
+                        "La vista previa venció. Selecciona el archivo nuevamente.")
+                payload = preview_record.payload
                 checked_rows = [row["row_number"] for row in payload["rows"]
                                 if request.POST.get(f"priority_check_{row['row_number']}") in {"1", "on", "true"}]
                 for row in payload["rows"]:
@@ -412,7 +388,9 @@ def bulk_load_program(request):
                 AuditEvent.objects.create(user=request.user, action="BULK_IMPORT_RESULT",
                     entity="ProductionOrder", data={"file": payload["filename"],
                         "added": added, "skipped": 0, "batch_id": payload["batch_id"]})
-        except signing.BadSignature:
+                preview_record.confirmed_at = timezone.now()
+                preview_record.save(update_fields=["confirmed_at"])
+        except (ProgramImportPreview.DoesNotExist, ValueError):
             form.add_error(None, "La vista previa venció o no es válida. Selecciona el archivo nuevamente.")
         except (ValidationError, KeyError, ValueError) as exc:
             form.add_error(None, exc)
@@ -423,6 +401,7 @@ def bulk_load_program(request):
     form = BulkProgramForm(request.POST or None, request.FILES or None)
     if request.method == "POST" and form.is_valid():
         try:
+            validate_xlsx_archive(form.cleaned_data["file"])
             workbook = load_workbook(form.cleaned_data["file"], data_only=True, read_only=True)
             sheet = workbook["Sheet1"] if "Sheet1" in workbook.sheetnames else workbook.active
             expected = ["ID Cliente", "Orden de Produccion", "Linea Prod Clte",
@@ -435,6 +414,9 @@ def bulk_load_program(request):
                     + ", ".join(expected + ["Linea"]))
             rows, errors = [], []
             for row_number, row in enumerate(sheet.iter_rows(min_row=2, values_only=True), 2):
+                if row_number > MAX_XLSX_ROWS + 1:
+                    raise ValidationError(
+                        f"El archivo excede el máximo de {MAX_XLSX_ROWS} filas de datos.")
                 client, program, customer_line = map(_cell_text, row[:3])
                 required, part_number, raw_quantity = row[3], _cell_text(row[4]), row[5]
                 line = _cell_text(row[6] if len(row) > 6 else "") or customer_line
@@ -475,9 +457,15 @@ def bulk_load_program(request):
                 form.add_error("file", ValidationError(errors))
             if not rows:
                 form.add_error("file", "El archivo no contiene filas válidas para importar.")
-            token = signing.dumps({"user": request.user.pk, "rows": payload_rows, "batch_id": str(uuid4()),
-                                   "filename": request.FILES["file"].name},
-                                  salt="program-preview-v2", compress=True) if rows and not errors else ""
+            token = ""
+            if rows and not errors:
+                token = str(uuid4())
+                ProgramImportPreview.objects.create(
+                    token=token, user=request.user,
+                    payload={"rows": payload_rows, "batch_id": str(uuid4()),
+                             "filename": request.FILES["file"].name},
+                    expires_at=timezone.now() + timedelta(minutes=30),
+                )
             return render(request, "operations/program_load.html", {
                 "form": form, "active_tab": "bulk", "preview": preview,
                 "preview_token": token, "preview_added": added,
@@ -520,6 +508,13 @@ def process_list(request):
 def universe(request):
     part_form = UniversePartForm(request.POST or None)
     import_form = UniverseImportForm(request.POST or None, request.FILES or None)
+    access = access_for(request.user)
+    if request.method == "POST" and request.POST.get("action") == "add" and not access.universe_edit:
+        messages.error(request, "No tienes permiso para editar el Universo.")
+        return redirect("universe")
+    if request.method == "POST" and request.POST.get("action") == "import" and not access.universe_import:
+        messages.error(request, "No tienes permiso para importar el Universo.")
+        return redirect("universe")
     if request.method == "POST" and request.POST.get("action") == "add" and part_form.is_valid():
         part_form.save()
         messages.success(request, "La pieza se agregÃ³ al Universo Ramos Arizpe.")
@@ -552,6 +547,7 @@ def _universe_key(value):
 
 @transaction.atomic
 def _import_universe_workbook(upload):
+    validate_xlsx_archive(upload)
     workbook = load_workbook(upload, data_only=True, read_only=True)
     sheet = workbook.active
     header_row = None
@@ -576,6 +572,10 @@ def _import_universe_workbook(upload):
     description_col = col("descripcion", "description")
     created = updated = skipped = 0
     for values in sheet.iter_rows(min_row=header_row + 1, values_only=True):
+        if created + updated + skipped >= MAX_XLSX_ROWS:
+            workbook.close()
+            raise ValidationError(
+                f"El archivo excede el máximo de {MAX_XLSX_ROWS} filas de datos.")
         part_number = _universe_text(values[part_col] if part_col is not None and len(values) > part_col else "")
         if not part_number or _universe_key(part_number) == "numerodeparte":
             skipped += 1
@@ -851,7 +851,7 @@ def _progress_dashboard_data():
         status=ProductionOrder.Status.CANCELLED
     ).select_related("part", "part__client").annotate(
         completed_quantity=Sum("work_items__closes__quantity")
-    ).order_by("program", "part__client__name", "part__number")
+    ).order_by("program", "part__client__name", "part__number")[:5000]
 
     progress_data = []
     for order in orders:
@@ -971,7 +971,10 @@ def report_csv(request):
     response.write("\ufeff")
     writer = csv.writer(response)
     writer.writerow(["Folio", "Orden", "Programa", "Número de parte", "Cantidad", "Máquina", "Cierre", "Turno", "Kilogramos", "Operador", "Comentario"])
-    for row in rows:
-        writer.writerow([row.folio, row.work_item.order.folio, row.work_item.order.program, row.work_item.order.part.number,
-            row.quantity, row.work_item.machine.code, row.closed_at, row.shift, row.weight_kg, row.closed_by or "", row.comment])
+    for row in rows[:10000]:
+        writer.writerow([spreadsheet_safe(row.folio), spreadsheet_safe(row.work_item.order.folio),
+            spreadsheet_safe(row.work_item.order.program), spreadsheet_safe(row.work_item.order.part.number),
+            row.quantity, spreadsheet_safe(row.work_item.machine.code), row.closed_at,
+            spreadsheet_safe(row.shift), row.weight_kg,
+            spreadsheet_safe(row.closed_by or ""), spreadsheet_safe(row.comment)])
     return response

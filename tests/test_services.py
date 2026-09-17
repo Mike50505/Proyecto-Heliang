@@ -2,10 +2,13 @@ import pytest
 from decimal import Decimal
 from django.contrib.auth import get_user_model
 from django.core.exceptions import ValidationError
+from django.db import IntegrityError, transaction
 from django.utils import timezone
 from datetime import datetime
-from operations.models import Client, Machine, Part, ProductionOrder, WorkInProcess
-from operations.services import close_production, start_production
+from operations.models import (Client, Machine, Part, ProductionClose,
+                               ProductionOrder, WorkInProcess)
+from operations.services import (close_production, edit_production_order,
+                                 next_folio, start_production)
 
 @pytest.fixture
 def data(db):
@@ -67,10 +70,65 @@ def test_partial_close_can_release_machine_and_return_balance_to_order(data):
 def test_release_full_quantity_does_not_reopen_order(data):
     order, machine, employee = data
     work = start_production(order=order, machine=machine, quantity=100, employee=employee)
+    order.refresh_from_db()
+    assert order.status == ProductionOrder.Status.ALLOCATED
     close_production(work_item=work, quantity=100, employee=employee)
     order.refresh_from_db()
     assert order.remaining_quantity == Decimal("0")
     assert order.status == ProductionOrder.Status.COMPLETE
+
+
+@pytest.mark.django_db
+def test_database_rejects_two_active_jobs_for_one_machine(data):
+    order, machine, employee = data
+    start_production(order=order, machine=machine, quantity=20, employee=employee)
+    other = ProductionOrder.objects.create(
+        folio="O01012026-2", program="S2", part=order.part,
+        quantity=10, remaining_quantity=10,
+    )
+    with pytest.raises(IntegrityError), transaction.atomic():
+        WorkInProcess.objects.create(
+            folio="P-DUPLICATE", order=other, machine=machine,
+            initial_quantity=10, remaining_quantity=10,
+            started_at=timezone.now(), started_by=employee,
+        )
+
+
+@pytest.mark.django_db
+def test_edit_revalidates_current_committed_quantity(data):
+    order, machine, employee = data
+    start_production(order=order, machine=machine, quantity=40, employee=employee)
+
+    with pytest.raises(ValidationError):
+        edit_production_order(
+            order_id=order.pk, program=order.program, part=order.part,
+            quantity=30, required_date=None, line="", priority=None,
+            user=employee,
+        )
+
+
+@pytest.mark.django_db
+def test_edit_cannot_change_part_after_production_started(data):
+    order, machine, employee = data
+    start_production(order=order, machine=machine, quantity=20, employee=employee)
+    replacement = Part.objects.create(number="P-2")
+
+    with pytest.raises(ValidationError):
+        edit_production_order(
+            order_id=order.pk, program=order.program, part=replacement,
+            quantity=order.quantity, required_date=None, line="", priority=None,
+            user=employee,
+        )
+
+
+@pytest.mark.django_db
+def test_folio_counter_advances_for_production_and_close(data):
+    when = timezone.now()
+    production_folios = [next_folio(WorkInProcess, "P", when) for _ in range(2)]
+    close_folios = [next_folio(ProductionClose, "C", when) for _ in range(2)]
+
+    assert production_folios[0] != production_folios[1]
+    assert close_folios[0] != close_folios[1]
 
 @pytest.mark.django_db
 def test_release_cannot_use_busy_or_invalid_work(data):

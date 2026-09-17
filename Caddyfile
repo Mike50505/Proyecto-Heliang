@@ -1,0 +1,11 @@
+http://heliang.home.arpa {
+    reverse_proxy web:8000
+}
+
+http://192.168.88.254, http://192.168.88.74, http://100.99.208.94 {
+    reverse_proxy web:8000
+}
+
+http://mantenimiento.home.arpa {
+    reverse_proxy mantenimiento:8000
+}

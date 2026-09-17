@@ -82,6 +82,21 @@ class ProductionCloseAdmin(admin.ModelAdmin):
     list_display = ("folio", "work_item", "quantity", "weight_kg", "closed_at", "shift")
     search_fields = ("folio", "work_item__folio", "work_item__order__part__number")
     list_filter = ("shift", "closed_at")
-for model in [Client, Process, Machine, Inventory, InventoryBucket, Movement, AuditEvent]:
-    admin.site.register(model)
+@admin.register(AuditEvent)
+class AuditEventAdmin(admin.ModelAdmin):
+    list_display = ("created_at", "user", "action", "entity", "entity_id")
+    search_fields = ("action", "entity", "entity_id", "user__username")
+    readonly_fields = ("created_at", "user", "action", "entity", "entity_id", "data")
 
+    def has_add_permission(self, request):
+        return False
+
+    def has_change_permission(self, request, obj=None):
+        return True
+
+    def has_delete_permission(self, request, obj=None):
+        return False
+
+
+for model in [Client, Process, Machine, Inventory, InventoryBucket, Movement]:
+    admin.site.register(model)

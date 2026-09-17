@@ -164,6 +164,33 @@ class ProgramLoadingTests(TestCase):
         self.assertEqual(order.program, "S41")
         self.assertEqual(order.remaining_quantity, Decimal("80"))
 
+    def test_order_part_cannot_change_after_production_exists(self):
+        self.user.is_superuser = True
+        self.user.save(update_fields=["is_superuser"])
+        self.client.force_login(self.user)
+        original = Part.objects.create(number="EDIT-ORIGINAL")
+        replacement = Part.objects.create(number="EDIT-REPLACEMENT")
+        order = ProductionOrder.objects.create(
+            folio="EDIT-PART-1", program="S40", part=original,
+            quantity=100, remaining_quantity=60,
+        )
+        machine = Machine.objects.create(code="EDIT-MACHINE")
+        WorkInProcess.objects.create(
+            folio="EDIT-WORK", order=order, machine=machine,
+            initial_quantity=40, remaining_quantity=40,
+            started_at=timezone.now(),
+        )
+
+        response = self.client.post(reverse("edit-order", args=[order.pk]), {
+            "program": "S40", "part": replacement.pk, "quantity": 100,
+            "required_date": "", "line": "",
+        })
+
+        self.assertEqual(response.status_code, 200)
+        order.refresh_from_db()
+        self.assertEqual(order.part, original)
+        self.assertContains(response, "No se puede cambiar la pieza")
+
     def test_order_deletion_is_confirmed_and_blocked_with_production(self):
         self.user.is_superuser = True
         self.user.save(update_fields=["is_superuser"])

@@ -1,40 +1,52 @@
 services:
   db:
     image: postgres:17-alpine
+    restart: unless-stopped
     environment:
       POSTGRES_DB: mesa
       POSTGRES_USER: mesa
-      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-mesa-local-change-me}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:?POSTGRES_PASSWORD es obligatoria}
     volumes:
       - postgres_data:/var/lib/postgresql/data
-    # PostgreSQL has no published ports and only joins this internal network.
     networks:
       - database
     healthcheck:
-      test: ["CMD-SHELL", "pg_isready -U mesa"]
+      test: ["CMD-SHELL", "pg_isready -U mesa -d mesa"]
       interval: 5s
       timeout: 5s
       retries: 10
+
   web:
     build: .
-    ports: ["8000:8000"]
+    restart: unless-stopped
+    ports:
+      - "80:8000"
     environment:
       POSTGRES_DB: mesa
       POSTGRES_USER: mesa
-      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-mesa-local-change-me}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:?POSTGRES_PASSWORD es obligatoria}
       POSTGRES_HOST: db
-      DJANGO_SECRET_KEY: ${DJANGO_SECRET_KEY:-local-only-change-me}
-      DJANGO_DEBUG: ${DJANGO_DEBUG:-1}
-      DJANGO_ALLOWED_HOSTS: ${DJANGO_ALLOWED_HOSTS:-localhost,127.0.0.1,192.168.88.77,192.168.88.125,100.91.22.88}
+      DJANGO_SECRET_KEY: ${DJANGO_SECRET_KEY:?DJANGO_SECRET_KEY es obligatoria}
+      DJANGO_DEBUG: ${DJANGO_DEBUG:-0}
+      DJANGO_ALLOWED_HOSTS: ${DJANGO_ALLOWED_HOSTS:-localhost,127.0.0.1,192.168.88.254,192.168.88.47,192.168.88.74,100.99.208.94}
       DJANGO_CSRF_TRUSTED_ORIGINS: ${DJANGO_CSRF_TRUSTED_ORIGINS:-}
+      DJANGO_SECURE_SSL: ${DJANGO_SECURE_SSL:-0}
+      DJANGO_SECURE_HSTS_SECONDS: ${DJANGO_SECURE_HSTS_SECONDS:-0}
+    security_opt:
+      - no-new-privileges:true
+    cap_drop:
+      - ALL
+    pids_limit: 256
     networks:
       - default
       - database
     depends_on:
       db:
         condition: service_healthy
+
 volumes:
   postgres_data:
+
 networks:
   default:
   database:

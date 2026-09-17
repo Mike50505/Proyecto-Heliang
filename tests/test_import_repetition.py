@@ -6,9 +6,12 @@ from django.core.exceptions import ValidationError
 from django.core.files.uploadedfile import SimpleUploadedFile
 from django.test import TestCase
 from django.urls import reverse
+from django.utils import timezone
+from datetime import timedelta
 from openpyxl import Workbook
 
-from operations.models import AuditEvent, Client, Part, ProductionOrder, ProgramImportReceipt
+from operations.models import (AuditEvent, Client, Part, ProductionOrder,
+                               ProgramImportPreview, ProgramImportReceipt)
 from operations.services import create_program_order
 
 
@@ -113,10 +116,11 @@ class ImportRepetitionTests(TestCase):
         self.assertFalse(ProgramImportReceipt.objects.exists())
 
     def test_expired_preview_cannot_import(self):
-        with patch("django.core.signing.time.time", return_value=1800000000):
-            response = self.upload([("A", 10, None)], confirm=False)
-        with patch("django.core.signing.time.time", return_value=1800001801):
-            result = self.confirm(response.context["preview_token"])
+        response = self.upload([("A", 10, None)], confirm=False)
+        ProgramImportPreview.objects.filter(
+            token=response.context["preview_token"]).update(
+                expires_at=timezone.now() - timedelta(seconds=1))
+        result = self.confirm(response.context["preview_token"])
         self.assertContains(result, "La vista previa venció")
         self.assertFalse(ProductionOrder.objects.exists())
 
