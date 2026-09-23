@@ -87,3 +87,29 @@ class UniverseSourceTests(TestCase):
         self.assertContains(response, "VISIBLE")
         self.assertNotContains(response, "HIDDEN")
         self.assertNotContains(response, "Descripción")
+
+    def test_can_switch_between_ramos_and_every_registered_part(self):
+        user = get_user_model().objects.create_user("all-parts-reader", password="secret-pass")
+        access = ModuleAccess.objects.get(user=user)
+        access.universe = True
+        access.save(update_fields=["universe"])
+        self.client.force_login(user)
+        Part.objects.create(number="RAMOS-PART", in_universe_ramos=True)
+        Part.objects.bulk_create([Part(number=f"OTHER-{index:04d}") for index in range(1001)])
+
+        ramos = self.client.get(reverse("universe"))
+        self.assertEqual(ramos.context["universe_total"], 1)
+        self.assertEqual(len(ramos.context["parts"]), 1)
+        self.assertContains(ramos, "Ver todos los números (1002)")
+
+        complete = self.client.get(reverse("universe"), {"catalog": "all"})
+        self.assertEqual(complete.context["universe_total"], 1002)
+        self.assertEqual(len(complete.context["parts"]), 1002)
+        self.assertContains(complete, "OTHER-1000")
+        self.assertContains(complete, "Ver solo Universo Ramos (1)")
+        self.assertContains(complete, 'name="catalog" value="all"', count=2)
+
+        filtered = self.client.get(reverse("universe"), {"catalog": "all", "q": "OTHER-1000"})
+        self.assertEqual(len(filtered.context["parts"]), 1)
+        self.assertEqual(filtered.context["parts"][0].number, "OTHER-1000")
+        self.assertFalse(Part.objects.get(number="OTHER-1000").in_universe_ramos)

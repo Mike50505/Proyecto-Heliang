@@ -588,10 +588,12 @@ def universe(request):
         else:
             messages.success(request, f"Universo actualizado: {created} piezas nuevas, {updated} actualizadas y {skipped} filas omitidas.")
             return redirect("universe")
+    show_all_parts = request.GET.get("catalog") == "all"
     query = request.GET.get("q", "").strip()
     diameter_filter = request.GET.get("diameter", "").strip()
     client_filter = request.GET.get("client", "").strip()
-    parts = Part.objects.filter(in_universe_ramos=True).select_related("client").order_by("number")
+    all_parts = Part.objects.all() if show_all_parts else Part.objects.filter(in_universe_ramos=True)
+    parts = all_parts.select_related("client").order_by("number")
     if query:
         parts = parts.filter(Q(number__icontains=query) | Q(diameter__icontains=query) |
                              Q(client__name__icontains=query))
@@ -599,14 +601,17 @@ def universe(request):
         parts = parts.filter(diameter__icontains=diameter_filter)
     if client_filter:
         parts = parts.filter(client__name__icontains=client_filter)
-    all_parts = Part.objects.filter(in_universe_ramos=True).select_related("client")
-    diameters = sorted({diameter_category(part.diameter) for part in all_parts if part.diameter}, key=diameter_category_sort_key)
-    clients = sorted({part.client.name for part in all_parts if part.client}, key=str.casefold)
+    catalog_parts = list(all_parts.select_related("client"))
+    diameters = sorted({diameter_category(part.diameter) for part in catalog_parts if part.diameter}, key=diameter_category_sort_key)
+    clients = sorted({part.client.name for part in catalog_parts if part.client}, key=str.casefold)
     return render(request, "operations/universe.html", {
-        "part_form": part_form, "import_form": import_form, "parts": parts[:1000], "query": query,
+        "part_form": part_form, "import_form": import_form, "parts": parts, "query": query,
         "diameter_filter": diameter_filter, "client_filter": client_filter,
         "diameters": diameters, "clients": clients,
-        "universe_total": all_parts.count(), "universe_diameter_count": len(diameters),
+        "show_all_parts": show_all_parts,
+        "catalog_total": Part.objects.count(),
+        "ramos_total": Part.objects.filter(in_universe_ramos=True).count(),
+        "universe_total": len(catalog_parts), "universe_diameter_count": len(diameters),
         "universe_client_count": len(clients),
     })
 
