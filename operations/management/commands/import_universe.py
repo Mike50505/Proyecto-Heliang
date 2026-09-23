@@ -1,4 +1,5 @@
 import re
+from fractions import Fraction
 from pathlib import Path
 
 from django.core.management.base import BaseCommand, CommandError
@@ -56,20 +57,36 @@ class Command(BaseCommand):
         diameter_conflicts = 0
         clients_seen = set()
 
-        # Un mismo número puede aparecer varias veces en el libro. Si sus textos
-        # de diámetro no coinciden, no elegimos uno arbitrariamente.
+        # Un número puede repetirse con diámetros equivalentes en decimal y fracción.
+        # Solo omitimos el diámetro cuando las medidas realmente difieren.
         diameter_values = {}
+        source_numbers = set()
         for row in sheet.iter_rows(min_row=2, values_only=True):
             part_index = 4 if has_external_id else 3
             diameter_index = 5 if has_external_id else 4
             part_number = text(row[part_index] if len(row) > part_index else "")
             diameter = text(row[diameter_index] if len(row) > diameter_index else "")
-            if (part_number and part_number.upper() != "NÚMERO DE PARTE"
-                    and diameter and diameter.upper() != "DIAMETRO"):
-                diameter_values.setdefault(part_number, set()).add(diameter)
+            if part_number and part_number.upper() != "NÚMERO DE PARTE":
+                source_numbers.add(part_number)
+                if diameter and diameter.upper() != "DIAMETRO":
+                    diameter_values.setdefault(part_number, set()).add(diameter)
+        def diameter_key(value):
+            try:
+                return Fraction(value.replace(",", "."))
+            except (ValueError, ZeroDivisionError):
+                return value.casefold()
         conflicting_parts = {
-            part_number for part_number, values in diameter_values.items() if len(values) > 1
+            part_number for part_number, values in diameter_values.items()
+            if len({diameter_key(value) for value in values}) > 1
         }
+        preferred_diameters = {
+            part_number: max(values, key=lambda value: ("/" in value, len(value), value))
+            for part_number, values in diameter_values.items() if part_number not in conflicting_parts
+        }
+        if not source_numbers:
+            raise CommandError("El Excel no contiene números de parte.")
+        if not diameters_only:
+            Part.objects.filter(in_universe_ramos=True).exclude(number__in=source_numbers).update(in_universe_ramos=False)
 
         for row in sheet.iter_rows(min_row=2, values_only=True):
             name = text(row[1] if len(row) > 1 else "")
@@ -77,7 +94,7 @@ class Command(BaseCommand):
             part_index = 4 if has_external_id else 3
             diameter_index = 5 if has_external_id else 4
             part_number = text(row[part_index] if len(row) > part_index else "")
-            diameter = text(row[diameter_index] if len(row) > diameter_index else "")
+            diameter = preferred_diameters.get(part_number, "")
             if not name or name.upper() == "CLIENTE" or not part_number or part_number.upper() == "NÚMERO DE PARTE":
                 continue
 
@@ -105,11 +122,15 @@ class Command(BaseCommand):
                 part = Part.objects.create(
                     number=part_number,
                     client=client,
+                    in_universe_ramos=not diameters_only,
                     diameter=diameter if diameter and part_number not in conflicting_parts else "",
                 )
                 updated_parts += 1
                 continue
             part_changes = []
+            if not diameters_only and not part.in_universe_ramos:
+                part.in_universe_ramos = True
+                part_changes.append("in_universe_ramos")
             if client is not None and part.client_id != client.pk:
                 part.client = client
                 part_changes.append("client")

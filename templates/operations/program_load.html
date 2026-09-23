@@ -1,4 +1,4 @@
-{% extends 'base.html' %}{% block title %}Cargar programa · MESA{% endblock %}{% block content %}
+{% extends 'base.html' %}{% load static %}{% block title %}Cargar programa · MESA{% endblock %}{% block content %}
 <div class="title-row"><div><span class="eyebrow">PROGRAMACIÓN</span><h1>Carga de programa</h1><p>Registra una orden manualmente o importa la plantilla de producción.</p></div><a class="button secondary" href="{% url 'order-list' %}">Ver programas</a></div>
 <div class="tabs"><a class="{% if active_tab == 'single' %}active{% endif %}" href="{% url 'load-program' %}">Carga individual</a><a class="{% if active_tab == 'bulk' %}active{% endif %}" href="{% url 'bulk-load-program' %}">Carga masiva</a></div>
 {% if active_tab == 'single' %}
@@ -10,7 +10,8 @@
   <h2>Vista previa de la carga</h2>
   <p>Aún no se han guardado programas. Cada fila se agregará con un folio nuevo, aunque sus datos se repitan. Se leen todas las filas con datos, incluso después de filas vacías.</p>
   <p><strong>{{ preview_added }}</strong> por agregar · <strong>{{ preview_skipped }}</strong> por omitir · <strong>{{ preview_errors }}</strong> errores</p>
-  <div style="overflow: auto; max-height: 60vh;">
+  <p>Marca las prioridades en el orden de atención: la primera seleccionada será 1, la segunda 2, y así sucesivamente.</p>
+  <div class="preview-table-wrap">
     <table class="preview-table">
       <thead><tr><th>Fila Excel</th><th>Cliente</th><th>Orden</th><th>Línea</th><th>Entrega</th><th>Parte</th><th>Cantidad</th><th>Prioridad</th><th>Resultado</th></tr></thead>
       <tbody>{% for row in preview %}<tr>
@@ -20,14 +21,12 @@
       </tr>{% endfor %}</tbody>
     </table>
   </div>
-  <script>
-    (() => { const checks=[...document.querySelectorAll('.preview-priority-check')], nums=[...document.querySelectorAll('.preview-priority-number')]; const sync=()=>{let n=0; checks.forEach((check,i)=>{nums[i].value=check.checked?String(++n):'';});}; checks.forEach(check=>check.addEventListener('change',sync)); sync(); })();
-  </script>
+  <script src="{% static 'js/preview-priorities.js' %}"></script>
   {% if preview_token %}
   <form method="post">{% csrf_token %}
     <input type="hidden" name="action" value="confirm">
     <input type="hidden" name="preview_token" value="{{ preview_token }}">
-    <p>Esta vista previa solo se puede confirmar una vez y vence en 30 minutos. Captura una prioridad opcional por fila; 1 es la más alta.</p>
+    <p>Esta vista previa solo se puede confirmar una vez y vence en 30 minutos. Las prioridades se guardarán en el orden seleccionado; 1 es la más alta.</p>
     <div class="form-actions"><a class="button secondary" href="{% url 'bulk-load-program' %}">Cancelar</a><button type="submit">Confirmar carga</button></div>
   </form>
   <script>

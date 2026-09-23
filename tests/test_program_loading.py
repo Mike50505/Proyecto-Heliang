@@ -117,6 +117,52 @@ class ProgramLoadingTests(TestCase):
         self.assertEqual(order.quantity, Decimal("600"))
         self.assertEqual(order.part.client, expected_client)
 
+    def test_bulk_priority_follows_selection_order_instead_of_excel_order(self):
+        self.user.is_superuser = True
+        self.user.save(update_fields=["is_superuser"])
+        self.client.force_login(self.user)
+        customer = Client.objects.create(code="SELECTION", name="Selection", external_id="SEL")
+        for existing in (False, True):
+            with self.subTest(existing_priorities=existing):
+                prefix = f"SEL-{existing}"
+                part = Part.objects.create(number=prefix, client=customer)
+                old_order = None
+                if existing:
+                    old_order = create_program_order(
+                        client_name=customer.name, client=customer, part_number=prefix,
+                        program="EXISTING", quantity="10", priority=1,
+                    )
+                workbook = Workbook()
+                sheet = workbook.active
+                sheet.title = "Sheet1"
+                sheet.append(["ID Cliente", "Orden de Produccion", "Linea Prod Clte",
+                              "Fecha de Entrega", "Num. Parte", "Cantidad", "Linea"])
+                for index in range(4):
+                    sheet.append(["SEL", f"{prefix}-{index}", "", None, part.number, 10, "L1"])
+                output = BytesIO()
+                workbook.save(output)
+                preview = self.client.post(reverse("bulk-load-program"), {
+                    "file": SimpleUploadedFile("selection.xlsx", output.getvalue()),
+                })
+                self.assertEqual(preview.status_code, 200)
+                response = self.client.post(reverse("bulk-load-program"), {
+                    "action": "confirm", "preview_token": preview.context["preview_token"],
+                    # Click Excel row 4 first, then row 2, then row 3. Row 5 is unselected.
+                    "priority_check_4": "1", "priority_4": "1",
+                    "priority_check_2": "1", "priority_2": "2",
+                    "priority_check_3": "1", "priority_3": "3",
+                })
+                self.assertRedirects(response, reverse("order-list"))
+                self.assertEqual(list(ProductionOrder.objects.filter(
+                    program__startswith=prefix, priority__isnull=False,
+                ).order_by("priority").values_list("program", "priority")), [
+                    (f"{prefix}-2", 1), (f"{prefix}-0", 2), (f"{prefix}-1", 3),
+                ])
+                self.assertIsNone(ProductionOrder.objects.get(program=f"{prefix}-3").priority)
+                if old_order:
+                    old_order.refresh_from_db()
+                    self.assertEqual(old_order.priority, 4)
+
     def test_client_resolution_falls_back_to_part_when_id_is_missing(self):
         expected_client = Client.objects.create(code="RHEEM-NIPLES", name="RHEEM NIPLES")
         Part.objects.create(number="82-TEST", client=expected_client)
@@ -143,6 +189,111 @@ class ProgramLoadingTests(TestCase):
 
         self.assertContains(response, "FILTER-OPEN")
         self.assertNotContains(response, "FILTER-DONE")
+
+    def test_priority_filter_groups_orders_by_diameter_then_priority(self):
+        self.user.is_superuser = True
+        self.user.save(update_fields=["is_superuser"])
+        self.client.force_login(self.user)
+        cases = [
+            ("HALF-2", "1/2", 5),
+            ("THREE-EIGHTHS-2", "C - 3/8", 4),
+            ("HALF-1", "0.5", 2),
+            ("THREE-EIGHTHS-1", "0.375", 1),
+            ("THREE-EIGHTHS-3", "3/8", 7),
+            ("NO-DIAMETER", "", 3),
+            ("NOT-PRIORITY", "1/4", None),
+        ]
+        for folio, diameter, priority in cases:
+            part = Part.objects.create(number=f"PART-{folio}", diameter=diameter)
+            ProductionOrder.objects.create(
+                folio=folio, program="S40", part=part,
+                quantity=10, remaining_quantity=10, priority=priority,
+            )
+
+        response = self.client.get(reverse("order-list"), {"priority": "1"})
+        orders = response.context["orders"]
+
+        self.assertEqual(response.status_code, 200)
+        self.assertEqual([order.folio for order in orders], [
+            "THREE-EIGHTHS-1", "THREE-EIGHTHS-2", "THREE-EIGHTHS-3",
+            "HALF-1", "HALF-2", "NO-DIAMETER",
+        ])
+        self.assertEqual([order.priority for order in orders], [1, 4, 7, 2, 5, 3])
+        self.assertEqual([order.diameter_priority for order in orders], [1, 2, 3, 1, 2, 1])
+        self.assertContains(response, "<th>Diámetro</th>", html=True)
+        self.assertContains(response, "diameter-group-heading", count=3)
+        self.assertContains(response, "Diámetro 3/8")
+        self.assertContains(response, "Diámetro 1/2")
+        self.assertContains(response, "Diámetro Sin diámetro")
+        self.assertContains(response, "3 órdenes", count=1)
+        self.assertContains(response, "2 órdenes", count=1)
+        self.assertContains(response, "1 orden", count=1)
+        self.assertContains(response, 'name="order_ids"', count=6)
+        self.assertContains(response, 'class="priority-badge"', count=6)
+        self.assertContains(response, "priority-editor")
+        self.assertContains(response, "priority_scope: 'diameter'")
+        self.assertNotContains(response, "NOT-PRIORITY")
+
+        unfiltered = self.client.get(reverse("order-list"))
+        self.assertNotContains(unfiltered, "diameter-group-heading")
+        self.assertContains(unfiltered, "priority-editor")
+
+    def test_priority_filter_reorders_only_within_its_diameter(self):
+        self.user.is_superuser = True
+        self.user.save(update_fields=["is_superuser"])
+        self.client.force_login(self.user)
+        orders = {}
+        for folio, diameter, priority in [
+            ("A-1", "3/8", 1), ("B-1", "1/2", 2),
+            ("A-2", "0.375", 3), ("B-2", "0.5", 4),
+            ("A-3", "C - 3/8", 5),
+        ]:
+            part = Part.objects.create(number=f"PART-{folio}", diameter=diameter)
+            orders[folio] = ProductionOrder.objects.create(
+                folio=folio, program="S40", part=part,
+                quantity=10, remaining_quantity=10, priority=priority,
+            )
+
+        response = self.client.post(reverse("update-order-priority", args=[orders["A-3"].pk]), {
+            "priority_scope": "diameter", "priority": "1",
+            "scope_ids": ",".join(str(orders[folio].pk) for folio in ("A-1", "A-2", "A-3")),
+        })
+
+        self.assertEqual(response.status_code, 200)
+        self.assertEqual(response.json()["display"], "01")
+        for order in orders.values():
+            order.refresh_from_db()
+        self.assertEqual({folio: order.priority for folio, order in orders.items()}, {
+            "A-1": 3, "B-1": 2, "A-2": 5, "B-2": 4, "A-3": 1,
+        })
+        filtered = self.client.get(reverse("order-list"), {"priority": "1"})
+        self.assertEqual(
+            [(order.folio, order.diameter_priority) for order in filtered.context["orders"]],
+            [("A-3", 1), ("A-1", 2), ("A-2", 3), ("B-1", 1), ("B-2", 2)],
+        )
+        self.assertTrue(AuditEvent.objects.filter(
+            action="EDIT_PRIORITY", entity_id="A-3", data__scope="diameter").exists())
+
+    def test_priority_filter_rejects_other_diameters_and_stale_order(self):
+        self.user.is_superuser = True
+        self.user.save(update_fields=["is_superuser"])
+        self.client.force_login(self.user)
+        parts = [Part.objects.create(number=f"P-{index}", diameter=diameter)
+                 for index, diameter in enumerate(("3/8", "1/2", "3/8"), 1)]
+        orders = [ProductionOrder.objects.create(
+            folio=f"S-{index}", program="S40", part=part,
+            quantity=10, remaining_quantity=10, priority=index,
+        ) for index, part in enumerate(parts, 1)]
+        url = reverse("update-order-priority", args=[orders[2].pk])
+        for scope in ((orders[0].pk, orders[1].pk, orders[2].pk),
+                      (orders[2].pk, orders[0].pk)):
+            response = self.client.post(url, {
+                "priority_scope": "diameter", "priority": "1",
+                "scope_ids": ",".join(str(pk) for pk in scope),
+            })
+            self.assertEqual(response.status_code, 409)
+        self.assertEqual(list(ProductionOrder.objects.order_by("pk").values_list(
+            "priority", flat=True)), [1, 2, 3])
 
     def test_order_can_be_edited_and_recalculates_available_balance(self):
         self.user.is_superuser = True

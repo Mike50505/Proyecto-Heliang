@@ -21,7 +21,7 @@ class Client(TimeStamped):
 
 class Part(TimeStamped):
     number = models.CharField("número de parte", max_length=80, unique=True)
-    description = models.CharField(max_length=250, blank=True)
+    in_universe_ramos = models.BooleanField(default=False, db_index=True)
     client = models.ForeignKey(Client, null=True, blank=True, on_delete=models.SET_NULL)
     diameter = models.CharField(max_length=40, blank=True)
     unit_weight_kg = models.DecimalField(max_digits=14, decimal_places=6, null=True, blank=True,

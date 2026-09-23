@@ -4,6 +4,8 @@
 <a class="module-card blue" href="{% url 'load-program' %}"><span class="module-icon">▤</span><span><b>Cargar programa</b><small>Carga individual o masiva desde Excel</small></span><i>→</i></a>
 {% endif %}{% if module_access.heliang %}
 <a class="module-card teal priority-card" href="{% url 'heliang' %}"><span class="module-icon">⚙</span><span><b>Heliang · Máquinas automáticas</b><small>Asigna órdenes, monitorea máquinas y registra cierres</small></span><i>→</i></a>
+{% endif %}{% if module_access.universe %}
+<a class="module-card blue" href="{% url 'universe' %}"><span class="module-icon">◈</span><span><b>Universo Ramos Arizpe</b><small>Consulta el catálogo maestro de piezas y diámetros</small></span><i>→</i></a>
 {% endif %}{% if module_access.surplus %}
 <a class="module-card amber" href="{% url 'surplus' %}"><span class="module-icon">↺</span><span><b>Material sobrante</b><small>Recibe o carga sobrante a un programa</small></span><i>→</i></a>
 {% endif %}{% if module_access.reports %}

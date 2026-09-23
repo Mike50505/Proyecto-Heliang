@@ -35,12 +35,15 @@ class ImportUniverseDiameterTests(TestCase):
     def test_import_keeps_exact_text_and_only_fills_empty_diameters(self):
         empty = Part.objects.create(number="P-EMPTY")
         existing = Part.objects.create(number="P-EXISTING", diameter="7/8")
+        equivalent = Part.objects.create(number="P-EQUIVALENT")
         conflict = Part.objects.create(number="P-CONFLICT")
         temp_dir, path = self.make_workbook([
             ("Cliente Uno", "C1", empty.number, "A - 3/8"),
             ("Cliente Uno", "C1", existing.number, "0.875"),
+            ("Cliente Uno", "C1", equivalent.number, "0.5"),
+            ("Cliente Uno", "C1", equivalent.number, "1/2"),
             ("Cliente Uno", "C1", conflict.number, "0.5"),
-            ("Cliente Uno", "C1", conflict.number, "1/2"),
+            ("Cliente Uno", "C1", conflict.number, "3/4"),
         ])
         self.addCleanup(temp_dir.cleanup)
 
@@ -48,10 +51,28 @@ class ImportUniverseDiameterTests(TestCase):
 
         empty.refresh_from_db()
         existing.refresh_from_db()
+        equivalent.refresh_from_db()
         conflict.refresh_from_db()
         self.assertEqual(empty.diameter, "A - 3/8")
         self.assertEqual(existing.diameter, "7/8")
+        self.assertEqual(equivalent.diameter, "1/2")
         self.assertEqual(conflict.diameter, "")
+
+    def test_import_marks_only_source_parts_as_universe(self):
+        stale = Part.objects.create(number="STALE", in_universe_ramos=True)
+        operational = Part.objects.create(number="OPERATIONAL")
+        temp_dir, path = self.make_workbook([
+            ("Cliente Uno", "C1", "IN-SOURCE", "1/2"),
+        ])
+        self.addCleanup(temp_dir.cleanup)
+
+        call_command("import_universe", path)
+
+        stale.refresh_from_db()
+        operational.refresh_from_db()
+        self.assertFalse(stale.in_universe_ramos)
+        self.assertFalse(operational.in_universe_ramos)
+        self.assertTrue(Part.objects.get(number="IN-SOURCE").in_universe_ramos)
 
     def test_overwrite_requires_explicit_option(self):
         part = Part.objects.create(number="P-EDITABLE", diameter="Original manual")

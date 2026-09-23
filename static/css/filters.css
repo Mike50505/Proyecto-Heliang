@@ -19,6 +19,14 @@
 }
 
 .row-actions { display:flex; gap:6px; }
+.filters > button,.filters > .button { min-width:92px; height:42px; display:inline-flex; align-items:center; justify-content:center; }
+.priority-toggle { display:inline-flex!important; flex-direction:row!important; align-items:center; gap:8px; min-height:42px; padding:0 12px; border:1px solid var(--line); border-radius:9px; color:var(--text); font-weight:700; cursor:pointer; background:var(--white); }
+.priority-toggle input { position:absolute; opacity:0; pointer-events:none; }
+.toggle-track { width:36px; height:20px; padding:3px; border-radius:999px; background:#b9c7d1; transition:background 160ms ease-out; }
+.toggle-track i { display:block; width:14px; height:14px; border-radius:50%; background:#fff; transition:transform 160ms ease-out; }
+.priority-toggle input:checked + .toggle-track { background:var(--blue); }
+.priority-toggle input:checked + .toggle-track i { transform:translateX(16px); }
+.priority-toggle:has(input:focus-visible) { outline:3px solid #55d5e5; outline-offset:2px; }
 .button.compact { padding:7px 10px; font-size:12px; }
 .button.danger,button.danger { color:#fff; background:#b83b47; }
 .delete-warning { margin:20px 0; padding:14px; border:1px solid #efb4b9; border-radius:8px; color:#8c2932; background:#fff0f1; }

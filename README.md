@@ -28,6 +28,10 @@ Para guardar los datos, ejecutar el mismo comando sin `--dry-run`. La operación
 
 Las cuentas encontradas en `ADMINISTRADORES` se crean con contraseña inutilizable; un administrador debe asignarles una contraseña segura desde `/admin/`.
 
+## Universo Ramos Arizpe
+
+En la página **Universo Ramos Arizpe**, usa **Actualizar desde Excel** y selecciona `Copia de UNIVERSO RAMOS.XLSX`. La carga usa la hoja `Sheet1 (2)` y relaciona cada número de parte con su cliente y diámetro. El Universo muestra las piezas del archivo; las demás piezas siguen disponibles para órdenes e inventario. Las descripciones no forman parte de este catálogo.
+
 ## Docker y PostgreSQL
 
 ```bash

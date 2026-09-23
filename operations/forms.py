@@ -6,6 +6,7 @@ from django.contrib.auth.forms import AuthenticationForm
 from django.db import transaction
 from django.db.models import Case, IntegerField, Value, When
 from django.utils import timezone
+from .formatting import format_diameter_fraction
 from .models import (Client, LoginThrottle, Machine, Part, Process,
                      ProductionOrder, WorkInProcess)
 
@@ -51,13 +52,15 @@ class ThrottledAuthenticationForm(AuthenticationForm):
 
 class OrderChoiceField(forms.ModelChoiceField):
     def label_from_instance(self, obj):
-        diameter = f" · diámetro {obj.part.diameter}" if obj.part.diameter else ""
+        diameter = (f" · diámetro {format_diameter_fraction(obj.part.diameter)}"
+                    if obj.part.diameter else "")
         return (f"{obj.folio} · {obj.program} · {obj.part.number}{diameter}"
                 f" · saldo {obj.remaining_quantity}")
 
 
     def label_from_instance(self, obj):
-        diameter = f" · diámetro {obj.part.diameter}" if obj.part.diameter else ""
+        diameter = (f" · diámetro {format_diameter_fraction(obj.part.diameter)}"
+                    if obj.part.diameter else "")
         priority = f"PRIORIDAD {obj.priority:02d} · " if obj.priority else ""
         return f"{priority}{obj.folio} · {obj.program} · {obj.part.number}{diameter} · saldo {obj.remaining_quantity}"
 
@@ -130,8 +133,8 @@ class BulkProgramForm(forms.Form):
 class UniversePartForm(forms.ModelForm):
     class Meta:
         model = Part
-        fields = ("number", "description", "client", "diameter", "unit_weight_kg")
-        labels = {"number": "N.º de parte", "description": "Descripción", "client": "Cliente",
+        fields = ("number", "client", "diameter", "unit_weight_kg")
+        labels = {"number": "N.º de parte", "client": "Cliente",
                   "diameter": "Diámetro", "unit_weight_kg": "Peso unitario (kg)"}
 
     def __init__(self, *args, **kwargs):

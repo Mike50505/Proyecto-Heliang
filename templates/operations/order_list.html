@@ -13,7 +13,7 @@
   </label>
   <label>Requerida desde <input type="date" name="start" value="{{ start }}"></label>
   <label>Requerida hasta <input type="date" name="end" value="{{ end }}"></label>
-  <label class="priority-filter"><input type="checkbox" name="priority" value="1" {% if priority_only %}checked{% endif %}> Solo prioridades</label>
+  <label class="priority-toggle"><input type="checkbox" name="priority" value="1" {% if priority_only %}checked{% endif %}><span class="toggle-track" aria-hidden="true"><i></i></span><span>Solo prioridades</span></label>
   <button type="submit">Filtrar</button>
   <a class="button secondary" href="{% url 'order-list' %}">Limpiar</a>
 </form>
@@ -32,12 +32,13 @@
     </div>
   </div>
   <div class="panel table-wrap">
-  <table class="order-selection-table">
-    <thead><tr><th class="selection-cell"><input id="select-all" type="checkbox" aria-label="Seleccionar todas las filas visibles"></th><th>N.º</th><th>Folio</th><th>Prioridad</th><th>Semana / orden de producción</th><th>Cliente</th><th>Parte</th><th>Cantidad</th><th>Restante</th><th>Requerida</th><th>Estado</th><th>Acciones</th></tr></thead>
+  <table class="order-selection-table{% if priority_only %} diameter-priority-table{% endif %}">
+    <thead><tr><th class="selection-cell"><input id="select-all" type="checkbox" aria-label="Seleccionar todas las filas visibles"></th><th>N.º</th><th>Folio</th><th>Prioridad</th><th>Semana / orden de producción</th><th>Cliente</th><th>Parte</th>{% if priority_only %}<th>Diámetro</th>{% endif %}<th>Cantidad</th><th>Restante</th><th>Requerida</th><th>Estado</th><th>Acciones</th></tr></thead>
     <tbody>
       {% for row in orders %}
-        <tr data-row-number="{{ forloop.counter }}"><td class="selection-cell"><input class="order-checkbox" type="checkbox" name="order_ids" value="{{ row.pk }}" aria-label="Seleccionar fila {{ forloop.counter }}"></td><td class="visual-row-number">{{ forloop.counter }}</td><td>{{ row.folio }}</td><td>{% if row.priority %}<span class="priority-badge">{{ row.priority|stringformat:'02d' }}</span>{% else %}—{% endif %}</td><td>{{ row.program }}</td><td>{{ row.part.client.name|default:'—' }}</td><td>{{ row.part.number }}</td><td>{{ row.quantity|floatformat:"-3" }}</td><td>{{ row.remaining_quantity|floatformat:"-3" }}</td><td>{{ row.required_date|default:'—' }}</td><td><span class="status {{ row.status|lower }}">{{ row.get_status_display }}</span></td><td><div class="row-actions"><a class="button compact secondary" href="{% url 'edit-order' row.pk %}">Editar</a></div></td></tr>
-      {% empty %}<tr><td colspan="12">No hay órdenes.</td></tr>{% endfor %}
+        {% if priority_only and row.starts_diameter_group %}<tr class="diameter-group-heading diameter-tone-{{ row.diameter_tone }}"><th colspan="13" scope="rowgroup"><span>Diámetro {{ row.diameter_group }}</span><small>{{ row.diameter_group_size }} {% if row.diameter_group_size == 1 %}orden{% else %}órdenes{% endif %}</small></th></tr>{% endif %}
+        <tr{% if priority_only %} class="priority-row diameter-tone-{{ row.diameter_tone }}" data-diameter-group="{{ row.diameter_group }}"{% endif %} data-row-number="{{ forloop.counter }}"><td class="selection-cell"><input class="order-checkbox" type="checkbox" name="order_ids" value="{{ row.pk }}" aria-label="Seleccionar fila {{ forloop.counter }}"></td><td class="visual-row-number">{{ forloop.counter }}</td><td>{{ row.folio }}</td><td>{% if priority_only %}<span class="priority-badge">{{ row.diameter_priority|stringformat:'02d' }}</span>{% elif row.priority %}<span class="priority-badge">{{ row.priority|stringformat:'02d' }}</span>{% else %}—{% endif %}</td><td>{{ row.program }}</td><td>{{ row.part.client.name|default:'—' }}</td><td>{{ row.part.number }}</td>{% if priority_only %}<td>{{ row.diameter_group }}</td>{% endif %}<td>{{ row.quantity|floatformat:"-3" }}</td><td>{{ row.remaining_quantity|floatformat:"-3" }}</td><td>{{ row.required_date|default:'—' }}</td><td><span class="status {{ row.status|lower }}">{{ row.get_status_display }}</span></td><td><div class="row-actions"><a class="button compact secondary" href="{% url 'edit-order' row.pk %}">Editar</a></div></td></tr>
+      {% empty %}<tr><td colspan="{% if priority_only %}13{% else %}12{% endif %}">No hay órdenes.</td></tr>{% endfor %}
     </tbody>
   </table>
 </div>
@@ -80,6 +81,57 @@
   updateSelection();
 })();
 </script>
+{% if priority_only %}
+<script>
+(() => {
+  const csrf = document.querySelector('[name="csrfmiddlewaretoken"]')?.value;
+  const rows = [...document.querySelectorAll('.order-selection-table tbody tr[data-row-number]')];
+  const groups = new Map();
+  rows.forEach(row => {
+    const group = row.dataset.diameterGroup;
+    if (!groups.has(group)) groups.set(group, []);
+    groups.get(group).push(row);
+  });
+  rows.forEach(row => {
+    const checkbox = row.querySelector('.order-checkbox');
+    const cell = row.children[3];
+    const group = row.dataset.diameterGroup;
+    const groupRows = groups.get(group);
+    const scopeIds = groupRows.map(item => item.querySelector('.order-checkbox').value);
+    const current = Number(cell.querySelector('.priority-badge')?.textContent.trim());
+    cell.textContent = '';
+    const wrap = document.createElement('div'); wrap.className = 'priority-editor';
+    const input = document.createElement('input'); input.className = 'priority-input'; input.type = 'number'; input.min = '1'; input.max = String(groupRows.length); input.step = '1'; input.inputMode = 'numeric'; input.value = String(current);
+    input.setAttribute('aria-label', 'Posición de ' + checkbox.value + ' en diámetro ' + group);
+    const state = document.createElement('span'); state.className = 'priority-save-state'; state.setAttribute('aria-live', 'polite');
+    input.addEventListener('keydown', event => { if (event.key === 'Enter') { event.preventDefault(); input.blur(); } });
+    input.addEventListener('change', async () => {
+      const position = Number(input.value);
+      if (!Number.isInteger(position) || position < 1 || position > groupRows.length) {
+        state.textContent = 'Usa 1 a ' + groupRows.length;
+        input.value = String(current);
+        return;
+      }
+      if (position === current) return;
+      state.textContent = 'Guardando…'; input.disabled = true;
+      try {
+        const body = new URLSearchParams({priority_scope: 'diameter', priority: String(position), scope_ids: scopeIds.join(',')});
+        const response = await fetch('/ordenes/' + checkbox.value + '/prioridad/', {method: 'POST', headers: {'X-CSRFToken': csrf}, body});
+        const data = await response.json();
+        if (!response.ok) throw new Error(data.error || 'No se pudo guardar');
+        window.location.reload();
+      } catch (error) {
+        state.textContent = 'Error; recarga';
+        state.title = error.message;
+        input.value = String(current);
+        input.disabled = false;
+      }
+    });
+    wrap.append(input, state); cell.appendChild(wrap);
+  });
+})();
+</script>
+{% else %}
 <script>
 (() => {
   const csrf = document.querySelector('[name="csrfmiddlewaretoken"]')?.value;
@@ -107,4 +159,5 @@
   });
 })();
 </script>
+{% endif %}
 {% endblock %}

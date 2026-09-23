@@ -25,9 +25,13 @@ class SecurityHardeningTests(TestCase):
         access.save(update_fields=["universe"])
         self.client.force_login(user)
 
+        dashboard = self.client.get(reverse("dashboard"))
+        self.assertContains(dashboard, 'class="nav-priority" href="/universo-ramos-arizpe/"')
+        self.assertNotContains(dashboard, "universe-shortcut")
+
         response = self.client.post(reverse("universe"), {
             "action": "add", "number": "UNAUTHORIZED-PART",
-            "description": "", "client": "", "diameter": "", "unit_weight_kg": "",
+            "client": "", "diameter": "", "unit_weight_kg": "",
         })
 
         self.assertRedirects(response, reverse("universe"))

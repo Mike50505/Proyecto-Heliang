@@ -1,5 +1,7 @@
 import csv
 import re
+from itertools import islice
+from fractions import Fraction
 from uuid import uuid4
 from io import BytesIO
 from zipfile import BadZipFile
@@ -24,12 +26,14 @@ from .access import access_for, module_required
 from .forms import (BulkProgramForm, CloseProductionForm, ProcessMovementForm,
                     ProductionOrderEditForm, ProgramOrderForm, StartProductionForm,
                     SurplusMovementForm, UniverseImportForm, UniversePartForm)
+from .formatting import (diameter_category, diameter_category_sort_key,
+                         format_diameter_fraction)
 from .models import (AuditEvent, Client, Inventory, InventoryBucket, Machine, Movement, Part, Process,
                      ProductionClose, ProductionOrder, WorkInProcess, ProgramImportPreview)
 from .security import MAX_XLSX_ROWS, spreadsheet_safe, validate_xlsx_archive
 from .services import (close_production, create_program_order, move_process_material, move_surplus,
                        delete_production_orders, edit_production_order, resolve_program_client,
-                       set_production_order_priority, start_production)
+                       set_production_order_priority, reorder_production_order_within_diameter, start_production)
 
 
 @login_required
@@ -68,9 +72,34 @@ def order_list(request):
     if end:
         orders = orders.filter(required_date__lte=end)
     if priority_only:
-        orders = orders.filter(priority__isnull=False)
+        priority_orders = list(orders.filter(priority__isnull=False))
+        for order in priority_orders:
+            order.diameter_group = diameter_category(order.part.diameter)
+        priority_orders.sort(key=lambda order: (
+            diameter_category_sort_key(order.diameter_group),
+            order.priority, order.required_date or date.max, order.created_at, order.pk,
+        ))
+        visible_orders = priority_orders[:500]
+        diameter_totals = {}
+        for order in visible_orders:
+            diameter_totals[order.diameter_group] = diameter_totals.get(order.diameter_group, 0) + 1
+        previous_group = None
+        group_index = -1
+        position_in_group = 0
+        for order in visible_orders:
+            order.starts_diameter_group = order.diameter_group != previous_group
+            if order.starts_diameter_group:
+                group_index += 1
+                position_in_group = 0
+            position_in_group += 1
+            order.diameter_priority = position_in_group
+            order.diameter_tone = group_index % 4
+            order.diameter_group_size = diameter_totals[order.diameter_group]
+            previous_group = order.diameter_group
+    else:
+        visible_orders = orders.order_by("-created_at")[:500]
     return render(request, "operations/order_list.html", {
-        "orders": orders.order_by("-created_at")[:500], "query": query, "status": status,
+        "orders": visible_orders, "query": query, "status": status,
         "priority_only": priority_only,
         "start": start.isoformat() if start else "", "end": end.isoformat() if end else "",
         "status_choices": ProductionOrder.Status.choices,
@@ -119,6 +148,22 @@ def update_order_priority(request, pk):
             return JsonResponse({"error": "La prioridad debe ser un entero mayor que cero."}, status=400)
     else:
         priority = None
+    scope = request.POST.get("priority_scope", "")
+    if scope == "diameter":
+        if priority is None:
+            return JsonResponse({"error": "Indica una posición dentro del diámetro."}, status=400)
+        try:
+            scope_ids = [int(value) for value in request.POST.get("scope_ids", "").split(",")]
+        except ValueError:
+            return JsonResponse({"error": "El grupo de órdenes es inválido."}, status=400)
+        try:
+            updated = reorder_production_order_within_diameter(
+                order=order, position=priority, scope_ids=scope_ids, user=request.user)
+        except ValidationError as exc:
+            return JsonResponse({"error": exc.messages[0]}, status=409)
+        return JsonResponse({"priority": updated.priority, "display": f"{priority:02d}"})
+    if scope:
+        return JsonResponse({"error": "Tipo de prioridad inválido."}, status=400)
     set_production_order_priority(order=order, priority=priority, user=request.user)
     return JsonResponse({"priority": priority, "display": f"{priority:02d}" if priority else ""})
 
@@ -363,19 +408,26 @@ def bulk_load_program(request):
                 payload = preview_record.payload
                 checked_rows = [row["row_number"] for row in payload["rows"]
                                 if request.POST.get(f"priority_check_{row['row_number']}") in {"1", "on", "true"}]
+                pending_rows = []
                 for row in payload["rows"]:
-                    client = resolve_program_client(client_reference=row["reference"],
-                                                    part_number=row["part_number"])
-                    if client.pk != row["client_id"]:
-                        raise ValidationError("Cambió el cliente de una fila. Genera otra vista previa.")
                     raw_priority = request.POST.get(f"priority_{row['row_number']}", "").strip()
                     try:
-                        priority = (checked_rows.index(row["row_number"]) + 1
-                                    if row["row_number"] in checked_rows else (int(raw_priority) if raw_priority else None))
+                        priority = (int(raw_priority) if raw_priority else
+                                    checked_rows.index(row["row_number"]) + 1
+                                    if row["row_number"] in checked_rows else None)
                     except (TypeError, ValueError):
                         raise ValidationError(f"La prioridad de la fila {row['row_number']} debe ser un entero mayor que cero.")
                     if priority is not None and priority < 1:
                         raise ValidationError(f"La prioridad de la fila {row['row_number']} debe ser un entero mayor que cero.")
+                    pending_rows.append((priority, row))
+                # Insert in priority order: each creation renumbers the queue.
+                # Processing Excel order would let later inserts overtake earlier clicks.
+                pending_rows.sort(key=lambda item: (item[0] is None, item[0] or 0))
+                for priority, row in pending_rows:
+                    client = resolve_program_client(client_reference=row["reference"],
+                                                    part_number=row["part_number"])
+                    if client.pk != row["client_id"]:
+                        raise ValidationError("Cambió el cliente de una fila. Genera otra vista previa.")
                     create_program_order(
                         client_name=row["reference"], client=client,
                         program=row["program"], part_number=row["part_number"],
@@ -506,18 +558,27 @@ def process_list(request):
 @login_required
 @module_required("universe")
 def universe(request):
-    part_form = UniversePartForm(request.POST or None)
+    edit_part = get_object_or_404(Part, pk=request.POST.get("part_id")) if request.method == "POST" and request.POST.get("action") == "edit" else None
+    part_form = UniversePartForm(request.POST or None, instance=edit_part)
     import_form = UniverseImportForm(request.POST or None, request.FILES or None)
     access = access_for(request.user)
-    if request.method == "POST" and request.POST.get("action") == "add" and not access.universe_edit:
+    if request.method == "POST" and request.POST.get("action") in {"add", "edit"} and not access.universe_edit:
         messages.error(request, "No tienes permiso para editar el Universo.")
         return redirect("universe")
     if request.method == "POST" and request.POST.get("action") == "import" and not access.universe_import:
         messages.error(request, "No tienes permiso para importar el Universo.")
         return redirect("universe")
     if request.method == "POST" and request.POST.get("action") == "add" and part_form.is_valid():
-        part_form.save()
+        part = part_form.save(commit=False)
+        part.in_universe_ramos = True
+        part.save()
         messages.success(request, "La pieza se agregÃ³ al Universo Ramos Arizpe.")
+        return redirect("universe")
+    if request.method == "POST" and request.POST.get("action") == "edit" and part_form.is_valid():
+        part = part_form.save(commit=False)
+        part.in_universe_ramos = True
+        part.save()
+        messages.success(request, "Pieza actualizada correctamente.")
         return redirect("universe")
     if request.method == "POST" and request.POST.get("action") == "import" and import_form.is_valid():
         try:
@@ -528,12 +589,25 @@ def universe(request):
             messages.success(request, f"Universo actualizado: {created} piezas nuevas, {updated} actualizadas y {skipped} filas omitidas.")
             return redirect("universe")
     query = request.GET.get("q", "").strip()
-    parts = Part.objects.select_related("client").order_by("number")
+    diameter_filter = request.GET.get("diameter", "").strip()
+    client_filter = request.GET.get("client", "").strip()
+    parts = Part.objects.filter(in_universe_ramos=True).select_related("client").order_by("number")
     if query:
-        parts = parts.filter(Q(number__icontains=query) | Q(description__icontains=query) |
-                             Q(diameter__icontains=query) | Q(client__name__icontains=query))
+        parts = parts.filter(Q(number__icontains=query) | Q(diameter__icontains=query) |
+                             Q(client__name__icontains=query))
+    if diameter_filter:
+        parts = parts.filter(diameter__icontains=diameter_filter)
+    if client_filter:
+        parts = parts.filter(client__name__icontains=client_filter)
+    all_parts = Part.objects.filter(in_universe_ramos=True).select_related("client")
+    diameters = sorted({diameter_category(part.diameter) for part in all_parts if part.diameter}, key=diameter_category_sort_key)
+    clients = sorted({part.client.name for part in all_parts if part.client}, key=str.casefold)
     return render(request, "operations/universe.html", {
         "part_form": part_form, "import_form": import_form, "parts": parts[:1000], "query": query,
+        "diameter_filter": diameter_filter, "client_filter": client_filter,
+        "diameters": diameters, "clients": clients,
+        "universe_total": all_parts.count(), "universe_diameter_count": len(diameters),
+        "universe_client_count": len(clients),
     })
 
 
@@ -549,11 +623,14 @@ def _universe_key(value):
 def _import_universe_workbook(upload):
     validate_xlsx_archive(upload)
     workbook = load_workbook(upload, data_only=True, read_only=True)
-    sheet = workbook.active
+    sheet = workbook["Sheet1 (2)"] if "Sheet1 (2)" in workbook.sheetnames else workbook.active
     header_row = None
     columns = {}
     for index, values in enumerate(sheet.iter_rows(min_row=1, max_row=10, values_only=True), 1):
-        keys = {_universe_key(value): position for position, value in enumerate(values)}
+        keys = {}
+        for position, value in enumerate(values):
+            key = _universe_key(value)
+            if key: keys.setdefault(key, position)
         if any("numerodeparte" in key or "numpart" in key for key in keys):
             header_row, columns = index, keys
             break
@@ -569,19 +646,50 @@ def _import_universe_workbook(upload):
     diameter_col = col("diametro", "diameter")
     client_col = col("cliente", "customer")
     external_col = col("id", "idcliente", "clienteid")
-    description_col = col("descripcion", "description")
+    if part_col is None or client_col is None or diameter_col is None:
+        workbook.close()
+        raise ValidationError("El Excel debe contener CLIENTE, NÚMERO DE PARTE y DIAMETRO.")
+    data_rows = list(islice(sheet.iter_rows(min_row=header_row + 1, values_only=True), MAX_XLSX_ROWS + 1))
+    if len(data_rows) > MAX_XLSX_ROWS:
+        workbook.close()
+        raise ValidationError(f"El archivo excede el máximo de {MAX_XLSX_ROWS} filas de datos.")
+    diameter_values = {}
+    for values in data_rows:
+        number = _universe_text(values[part_col] if len(values) > part_col else "")
+        diameter = _universe_text(values[diameter_col] if len(values) > diameter_col else "")
+        if number and diameter:
+            diameter_values.setdefault(number, set()).add(diameter)
+    def diameter_key(value):
+        try:
+            return Fraction(value.replace(",", "."))
+        except (ValueError, ZeroDivisionError):
+            return value.casefold()
+    conflicting_parts = {
+        number for number, values in diameter_values.items()
+        if len({diameter_key(value) for value in values}) > 1
+    }
+    preferred_diameters = {
+        number: max(values, key=lambda value: ("/" in value, len(value), value))
+        for number, values in diameter_values.items() if number not in conflicting_parts
+    }
+    source_numbers = {
+        _universe_text(values[part_col]) for values in data_rows
+        if len(values) > part_col and _universe_text(values[part_col])
+        and _universe_key(values[part_col]) != "numerodeparte"
+    }
+    if not source_numbers:
+        workbook.close()
+        raise ValidationError("El Excel no contiene números de parte.")
+    Part.objects.filter(in_universe_ramos=True).exclude(number__in=source_numbers).update(in_universe_ramos=False)
     created = updated = skipped = 0
-    for values in sheet.iter_rows(min_row=header_row + 1, values_only=True):
-        if created + updated + skipped >= MAX_XLSX_ROWS:
-            workbook.close()
-            raise ValidationError(
-                f"El archivo excede el máximo de {MAX_XLSX_ROWS} filas de datos.")
+    for values in data_rows:
         part_number = _universe_text(values[part_col] if part_col is not None and len(values) > part_col else "")
         if not part_number or _universe_key(part_number) == "numerodeparte":
             skipped += 1
             continue
         client_name = _universe_text(values[client_col] if client_col is not None and len(values) > client_col else "")
         external_id = _universe_text(values[external_col] if external_col is not None and len(values) > external_col else "")
+        if external_id.upper() in {"#N/A", "N/A", "NA"}: external_id = ""
         client = None
         if client_name:
             code = re.sub(r"[^A-Z0-9]+", "-", client_name.upper()).strip("-")[:30] or "SIN-CLIENTE"
@@ -590,13 +698,17 @@ def _import_universe_workbook(upload):
             if client.name != client_name: client.name = client_name; changes.append("name")
             if external_id and client.external_id != external_id: client.external_id = external_id; changes.append("external_id")
             if changes: client.save(update_fields=[*changes, "updated_at"])
-        part, was_created = Part.objects.get_or_create(number=part_number, defaults={"client": client})
+        part, was_created = Part.objects.get_or_create(
+            number=part_number, defaults={"client": client, "in_universe_ramos": True})
         changes = []
-        diameter = _universe_text(values[diameter_col] if diameter_col is not None and len(values) > diameter_col else "")
-        description = _universe_text(values[description_col] if description_col is not None and len(values) > description_col else "")
+        if not part.in_universe_ramos:
+            part.in_universe_ramos = True
+            changes.append("in_universe_ramos")
+        diameter = preferred_diameters.get(part_number, "")
         if client and part.client_id != client.pk: part.client = client; changes.append("client")
-        if diameter and part.diameter != diameter: part.diameter = diameter; changes.append("diameter")
-        if description and part.description != description: part.description = description; changes.append("description")
+        if diameter and part.diameter != diameter:
+            part.diameter = diameter
+            changes.append("diameter")
         if changes: part.save(update_fields=[*changes, "updated_at"])
         created += int(was_created); updated += int(not was_created and bool(changes))
     workbook.close()
@@ -726,8 +838,31 @@ def heliang(request):
             priority_sort=Case(When(priority__isnull=True, then=Value(2147483647)),
                                default="priority", output_field=IntegerField())
         ).order_by("priority_sort", "required_date", "created_at")
-    priority_orders = open_orders_query.filter(priority__isnull=False)[:100]
-    open_orders = open_orders_query[:100]
+    priority_orders = list(open_orders_query.filter(priority__isnull=False)[:100])
+    priority_orders.sort(key=lambda order: (
+        diameter_category_sort_key(diameter_category(order.part.diameter)),
+        order.priority, order.required_date or date.max, order.created_at,
+    ))
+    diameter_totals = {}
+    for order in priority_orders:
+        group = diameter_category(order.part.diameter)
+        diameter_totals[group] = diameter_totals.get(group, 0) + 1
+    diameter_positions = {}
+    previous_group = None
+    group_index = -1
+    for order in priority_orders:
+        order.diameter_group = diameter_category(order.part.diameter)
+        order.starts_diameter_group = order.diameter_group != previous_group
+        if order.starts_diameter_group:
+            group_index += 1
+        order.diameter_tone = group_index % 4
+        order.diameter_group_size = diameter_totals[order.diameter_group]
+        diameter_positions[order.diameter_group] = diameter_positions.get(order.diameter_group, 0) + 1
+        order.heliang_priority = diameter_positions[order.diameter_group]
+        previous_group = order.diameter_group
+    open_orders = list(open_orders_query[:100])
+    for order in open_orders:
+        order.part.diameter = format_diameter_fraction(order.part.diameter)
     active_items = WorkInProcess.objects.filter(status=WorkInProcess.Status.ACTIVE).select_related(
         "order__part", "machine", "started_by").order_by("started_at")
     recent_closes = ProductionClose.objects.select_related(

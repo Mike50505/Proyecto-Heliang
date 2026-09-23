@@ -1,10 +1,11 @@
 import re
-from datetime import time
+from datetime import date, time
 from decimal import Decimal
 from django.core.exceptions import ValidationError
 from django.db import transaction
 from django.db.models import F
 from django.utils import timezone
+from .formatting import diameter_category
 from .models import (AuditEvent, Client, Inventory, InventoryBucket, Movement, Part,
                      ProductionClose, ProductionOrder, WorkInProcess, FolioCounter,
                      Machine)
@@ -187,6 +188,51 @@ def set_production_order_priority(*, order, priority, user=None):
     normalize_priorities()
     AuditEvent.objects.create(user=user, action="EDIT_PRIORITY", entity="ProductionOrder",
                               entity_id=current.folio, data={"priority": priority, "previous": old})
+    return current
+
+
+@transaction.atomic
+def reorder_production_order_within_diameter(*, order, position, scope_ids, user=None):
+    if position < 1 or not scope_ids or len(scope_ids) > 500 or len(scope_ids) != len(set(scope_ids)):
+        raise ValidationError("La posición o el grupo de prioridades es inválido.")
+    if order.pk not in scope_ids:
+        raise ValidationError("La orden no pertenece al grupo mostrado. Recarga la página.")
+    _acquire_named_lock("production-order-priorities")
+    prioritized = list(ProductionOrder.objects.select_related("part").select_for_update().filter(
+        priority__isnull=False))
+    scope_set = set(scope_ids)
+    selected = [item for item in prioritized if item.pk in scope_set]
+    if len(selected) != len(scope_ids):
+        raise ValidationError("Las prioridades cambiaron. Recarga la página.")
+    current = next(item for item in selected if item.pk == order.pk)
+    diameter = diameter_category(current.part.diameter)
+    if any(diameter_category(item.part.diameter) != diameter for item in selected):
+        raise ValidationError("El grupo contiene órdenes de otro diámetro.")
+    selected.sort(key=lambda item: (
+        item.priority, item.required_date or date.max, item.created_at, item.pk))
+    if [item.pk for item in selected] != scope_ids:
+        raise ValidationError("Las prioridades cambiaron. Recarga la página.")
+    if position > len(selected):
+        raise ValidationError("La posición excede las órdenes de este diámetro.")
+    slots = [item.priority for item in selected]
+    if len(set(slots)) != len(slots):
+        raise ValidationError("Hay prioridades duplicadas. Recarga la página.")
+    previous_position = selected.index(current) + 1
+    if previous_position == position:
+        return current
+    reordered = selected.copy()
+    reordered.remove(current)
+    reordered.insert(position - 1, current)
+    updated_at = timezone.now()
+    for item, slot in zip(reordered, slots):
+        if item.priority != slot:
+            ProductionOrder.objects.filter(pk=item.pk).update(priority=slot, updated_at=updated_at)
+            item.priority = slot
+    AuditEvent.objects.create(
+        user=user, action="EDIT_PRIORITY", entity="ProductionOrder", entity_id=current.folio,
+        data={"scope": "diameter", "diameter": diameter,
+              "previous_position": previous_position, "position": position},
+    )
     return current
 
 

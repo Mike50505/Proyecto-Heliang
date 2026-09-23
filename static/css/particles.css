@@ -1,0 +1,13 @@
+/* The viewport-sized canvas avoids allocating a bitmap for long tables. */
+body { isolation:isolate; }
+html:not([data-theme="dark"]) body:has(.particle-background) { background:#fcfcfd; }
+.particle-background {
+  position:fixed;
+  inset:0;
+  width:100%;
+  height:100%;
+  z-index:-1;
+  pointer-events:none;
+  user-select:none;
+}
+@media print { .particle-background { display:none; } }
