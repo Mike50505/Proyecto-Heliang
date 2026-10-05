@@ -3,6 +3,7 @@ from fractions import Fraction
 from pathlib import Path
 
 from django.core.management.base import BaseCommand, CommandError
+from django.utils import timezone
 from django.db import transaction
 from openpyxl import load_workbook
 
@@ -123,6 +124,7 @@ class Command(BaseCommand):
                     number=part_number,
                     client=client,
                     in_universe_ramos=not diameters_only,
+                    universe_added_at=timezone.now() if not diameters_only else None,
                     diameter=diameter if diameter and part_number not in conflicting_parts else "",
                 )
                 updated_parts += 1
@@ -130,7 +132,8 @@ class Command(BaseCommand):
             part_changes = []
             if not diameters_only and not part.in_universe_ramos:
                 part.in_universe_ramos = True
-                part_changes.append("in_universe_ramos")
+                part.universe_added_at = timezone.now()
+                part_changes.extend(["in_universe_ramos", "universe_added_at"])
             if client is not None and part.client_id != client.pk:
                 part.client = client
                 part_changes.append("client")

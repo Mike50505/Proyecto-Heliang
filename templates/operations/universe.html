@@ -17,6 +17,18 @@
 </div>
 <div class="universe-layout">
   {% if module_access.universe_edit %}<section class="form-card no-margin"><h2>Agregar pieza</h2><form method="post">{% csrf_token %}<input type="hidden" name="action" value="add">{{ part_form.as_p }}<div class="form-actions"><button type="submit">Guardar pieza</button></div></form></section>{% endif %}
+  {% if module_access.universe_import %}
+  <section class="form-card no-margin">
+    <h2>Agregar piezas desde Excel</h2>
+    <p>Descarga la plantilla y captura solo números de parte nuevos. Si hay un número repetido, no se agrega ninguna fila.</p>
+    <a class="button secondary" href="{% url 'download-universe-new-parts-template' %}">Descargar plantilla Excel</a>
+    <form method="post" enctype="multipart/form-data">
+      {% csrf_token %}<input type="hidden" name="action" value="import_new">
+      {{ new_parts_form.as_p }}
+      <div class="form-actions"><button type="submit">Subir piezas nuevas</button></div>
+    </form>
+  </section>
+  {% endif %}
   {% if module_access.universe_import %}<section class="form-card no-margin"><h2>Actualizar desde Excel</h2><p>Carga el catálogo de Copia de UNIVERSO RAMOS.XLSX. Se usan número de parte, cliente y diámetro de la hoja Sheet1 (2); las piezas existentes se actualizan por número.</p><form method="post" enctype="multipart/form-data">{% csrf_token %}<input type="hidden" name="action" value="import">{{ import_form.as_p }}<div class="form-actions"><button type="submit">Importar universo</button></div></form></section>{% endif %}
 </div>
 <form class="filters panel" method="get">
@@ -25,16 +37,18 @@
   <button type="submit">Filtrar</button>
   <a class="button secondary" href="{% url 'universe' %}{% if show_all_parts %}?catalog=all{% endif %}">Limpiar</a>
 </form>
-<section class="panel table-wrap"><table>
-  <thead><tr><th>N.º de parte</th><th>Cliente</th><th>Diámetro</th><th>Peso unitario</th>{% if show_all_parts %}<th>En Universo Ramos</th>{% endif %}</tr></thead>
-  <tbody>{% for part in parts %}<tr><td><b>{{ part.number }}</b></td><td>{{ part.client.name|default:'—' }}</td><td>{{ part.diameter|default:'—' }}</td><td>{{ part.unit_weight_kg|default:'—' }}</td>{% if show_all_parts %}<td>{% if part.in_universe_ramos %}Sí{% else %}No{% endif %}</td>{% endif %}</tr>{% empty %}<tr><td colspan="{% if show_all_parts %}5{% else %}4{% endif %}">No hay piezas que coincidan.</td></tr>{% endfor %}</tbody>
-</table></section>
-<section class="universe-stats"><article><strong>{{ universe_total }}</strong><span>{% if show_all_parts %}Piezas registradas{% else %}Piezas en Universo Ramos{% endif %}</span></article><article><strong>{{ universe_diameter_count }}</strong><span>Diámetros</span></article><article><strong>{{ universe_client_count }}</strong><span>Clientes</span></article></section>
 <form class="panel universe-quick-filters" method="get">
   {% if show_all_parts %}<input type="hidden" name="catalog" value="all">{% endif %}
   <label>Diámetro<select name="diameter"><option value="">Todos los diámetros</option>{% for value in diameters %}<option value="{{ value }}"{% if value == diameter_filter %} selected{% endif %}>{{ value }}</option>{% endfor %}</select></label>
+  <label>Fecha de subida<input type="date" name="uploaded_on" value="{{ uploaded_on }}"></label>
   <label>Cliente<select name="client"><option value="">Todos los clientes</option>{% for value in clients %}<option value="{{ value }}"{% if value == client_filter %} selected{% endif %}>{{ value }}</option>{% endfor %}</select></label>
   <button type="submit">Aplicar filtros</button>
   <a class="button secondary" href="{% url 'universe' %}{% if show_all_parts %}?catalog=all{% endif %}">Limpiar</a>
 </form>
+<section class="panel table-wrap"><table>
+  <thead><tr><th>N.º de parte</th><th>Cliente</th><th>Diámetro</th><th>Peso unitario</th><th>Fecha de subida</th>{% if show_all_parts %}<th>En Universo Ramos</th>{% endif %}</tr></thead>
+  <tbody>{% for part in parts %}<tr><td><b>{{ part.number }}</b></td><td>{{ part.client.name|default:'—' }}</td><td>{{ part.diameter|default:'—' }}</td><td>{{ part.unit_weight_kg|default:'—' }}</td><td>{{ part.universe_added_at|date:'Y-m-d'|default:'—' }}</td>{% if show_all_parts %}<td>{% if part.in_universe_ramos %}Sí{% else %}No{% endif %}</td>{% endif %}</tr>{% empty %}<tr><td colspan="{% if show_all_parts %}6{% else %}5{% endif %}">No hay piezas que coincidan.</td></tr>{% endfor %}</tbody>
+</table></section>
+<section class="universe-stats"><article><strong>{{ universe_total }}</strong><span>{% if show_all_parts %}Piezas registradas{% else %}Piezas en Universo Ramos{% endif %}</span></article><article><strong>{{ universe_diameter_count }}</strong><span>Diámetros</span></article><article><strong>{{ universe_client_count }}</strong><span>Clientes</span></article></section>
+
 {% endblock %}

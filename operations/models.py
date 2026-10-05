@@ -3,6 +3,7 @@ from django.conf import settings
 from django.core.validators import MinValueValidator
 from django.db import models
 from django.db.models import Q
+from django.db.models.functions import Lower
 
 
 class TimeStamped(models.Model):
@@ -22,10 +23,19 @@ class Client(TimeStamped):
 class Part(TimeStamped):
     number = models.CharField("número de parte", max_length=80, unique=True)
     in_universe_ramos = models.BooleanField(default=False, db_index=True)
+    universe_added_at = models.DateTimeField(null=True, blank=True, db_index=True)
     client = models.ForeignKey(Client, null=True, blank=True, on_delete=models.SET_NULL)
     diameter = models.CharField(max_length=40, blank=True)
     unit_weight_kg = models.DecimalField(max_digits=14, decimal_places=6, null=True, blank=True,
         validators=[MinValueValidator(Decimal("0"))])
+    class Meta:
+        constraints = [
+            models.UniqueConstraint(
+                Lower("number"), condition=Q(in_universe_ramos=True),
+                name="uq_universe_part_number_ci",
+            ),
+        ]
+
     def __str__(self): return self.number
 
 

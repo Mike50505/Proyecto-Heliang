@@ -4,6 +4,7 @@ from . import views
 urlpatterns = [
     path("", views.dashboard, name="dashboard"),
     path("ordenes/", views.order_list, name="order-list"),
+    path("ordenes/filtradas.xlsx", views.download_filtered_orders, name="download-filtered-orders"),
     path("ordenes/<int:pk>/editar/", views.edit_order, name="edit-order"),
     path("ordenes/<int:pk>/prioridad/", views.update_order_priority, name="update-order-priority"),
     path("ordenes/<int:pk>/eliminar/", views.delete_order, name="delete-order"),
@@ -25,6 +26,8 @@ urlpatterns = [
     path("inventario/sobrante/", views.surplus, name="surplus"),
     path("procesos/", views.process_list, name="process-list"),
     path("universo-ramos-arizpe/", views.universe, name="universe"),
+    path("universo-ramos-arizpe/plantilla-piezas.xlsx",
+         views.download_universe_new_parts_template, name="download-universe-new-parts-template"),
     path("reportes/", views.report, name="report"),
     path("reportes/csv/", views.report_csv, name="report-csv"),
 ]

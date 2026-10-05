@@ -10,8 +10,8 @@ from decimal import Decimal, InvalidOperation
 from django.contrib import messages
 from django.contrib.auth.decorators import login_required
 from django.core.exceptions import ValidationError
-from django.db import transaction
-from django.db.models import Case, Count, IntegerField, Max, Q, Sum, Value, When
+from django.db import IntegrityError, transaction
+from django.db.models import Case, Count, F, IntegerField, Max, Q, Sum, Value, When
 from django.db.models.functions import TruncDate
 from django.http import HttpResponse, JsonResponse
 from django.shortcuts import get_object_or_404, redirect, render
@@ -19,18 +19,20 @@ from django.template.loader import render_to_string
 from django.utils import timezone
 from openpyxl import Workbook, load_workbook
 from openpyxl.styles import Alignment, Font, PatternFill
+from openpyxl.utils import get_column_letter
 from openpyxl.utils.datetime import to_excel
 from openpyxl.worksheet.datavalidation import DataValidation
 from openpyxl.utils.exceptions import InvalidFileException
 from .access import access_for, module_required
 from .forms import (BulkProgramForm, CloseProductionForm, ProcessMovementForm,
                     ProductionOrderEditForm, ProgramOrderForm, StartProductionForm,
-                    SurplusMovementForm, UniverseImportForm, UniversePartForm)
+                    SurplusMovementForm, UniverseImportForm, UniverseNewPartsForm, UniversePartForm)
 from .formatting import (diameter_category, diameter_category_sort_key,
                          format_diameter_fraction)
 from .models import (AuditEvent, Client, Inventory, InventoryBucket, Machine, Movement, Part, Process,
                      ProductionClose, ProductionOrder, WorkInProcess, ProgramImportPreview)
 from .security import MAX_XLSX_ROWS, spreadsheet_safe, validate_xlsx_archive
+from .universe_upload import HEADERS as NEW_PART_HEADERS, import_new_universe_parts
 from .services import (close_production, create_program_order, move_process_material, move_surplus,
                        delete_production_orders, edit_production_order, resolve_program_client,
                        set_production_order_priority, reorder_production_order_within_diameter, start_production)
@@ -48,9 +50,8 @@ def dashboard(request):
     return render(request, "operations/dashboard.html", context)
 
 
-@login_required
-@module_required("program_loading")
-def order_list(request):
+def _orders_matching_list_filters(request, limit=500):
+    """Return orders in the same order as the list, with its active filters."""
     orders = ProductionOrder.objects.select_related("part", "part__client")
     query = request.GET.get("q", "").strip()
     status = request.GET.get("status", "").strip()
@@ -72,14 +73,15 @@ def order_list(request):
     if end:
         orders = orders.filter(required_date__lte=end)
     if priority_only:
-        priority_orders = list(orders.filter(priority__isnull=False))
-        for order in priority_orders:
+        visible_orders = list(orders.filter(priority__isnull=False))
+        for order in visible_orders:
             order.diameter_group = diameter_category(order.part.diameter)
-        priority_orders.sort(key=lambda order: (
+        visible_orders.sort(key=lambda order: (
             diameter_category_sort_key(order.diameter_group),
             order.priority, order.required_date or date.max, order.created_at, order.pk,
         ))
-        visible_orders = priority_orders[:500]
+        if limit is not None:
+            visible_orders = visible_orders[:limit]
         diameter_totals = {}
         for order in visible_orders:
             diameter_totals[order.diameter_group] = diameter_totals.get(order.diameter_group, 0) + 1
@@ -97,13 +99,83 @@ def order_list(request):
             order.diameter_group_size = diameter_totals[order.diameter_group]
             previous_group = order.diameter_group
     else:
-        visible_orders = orders.order_by("-created_at")[:500]
+        ordered = orders.order_by("-created_at")
+        visible_orders = list(ordered[:limit] if limit is not None else ordered)
+    return visible_orders, {
+        "query": query, "status": status, "priority_only": priority_only,
+        "start": start.isoformat() if start else "",
+        "end": end.isoformat() if end else "",
+    }
+
+
+@login_required
+@module_required("program_loading")
+def order_list(request):
+    visible_orders, filters = _orders_matching_list_filters(request)
     return render(request, "operations/order_list.html", {
-        "orders": visible_orders, "query": query, "status": status,
-        "priority_only": priority_only,
-        "start": start.isoformat() if start else "", "end": end.isoformat() if end else "",
+        "orders": visible_orders, **filters,
         "status_choices": ProductionOrder.Status.choices,
     })
+
+
+@login_required
+@module_required("program_loading")
+def download_filtered_orders(request):
+    orders, filters = _orders_matching_list_filters(request, limit=None)
+    priority_only = filters["priority_only"]
+    workbook = Workbook()
+    sheet = workbook.active
+    sheet.title = "Órdenes filtradas"
+    headers = ["N.º", "Folio", "Prioridad", "Semana / orden de producción",
+               "Cliente", "Parte"]
+    if priority_only:
+        headers.append("Diámetro")
+    headers.extend(["Cantidad", "Restante", "Requerida", "Estado"])
+    sheet.append(headers)
+    header_fill = PatternFill("solid", fgColor="0875BD")
+    for cell in sheet[1]:
+        cell.fill = header_fill
+        cell.font = Font(color="FFFFFF", bold=True)
+        cell.alignment = Alignment(horizontal="center")
+    for position, order in enumerate(orders, 1):
+        values = [
+            position, spreadsheet_safe(order.folio),
+            order.diameter_priority if priority_only else order.priority,
+            spreadsheet_safe(order.program),
+            spreadsheet_safe(order.part.client.name if order.part.client else ""),
+            spreadsheet_safe(order.part.number),
+        ]
+        if priority_only:
+            values.append(spreadsheet_safe(order.diameter_group))
+        values.extend([
+            order.quantity, order.remaining_quantity, order.required_date,
+            order.get_status_display(),
+        ])
+        sheet.append(values)
+    widths = [9, 22, 12, 33, 26, 24]
+    if priority_only:
+        widths.append(18)
+    widths.extend([16, 16, 18, 17])
+    for index, width in enumerate(widths, 1):
+        sheet.column_dimensions[get_column_letter(index)].width = width
+    sheet.freeze_panes = "A2"
+    sheet.auto_filter.ref = f"A1:{get_column_letter(len(headers))}{sheet.max_row}"
+    quantity_column = 8 if priority_only else 7
+    date_column = quantity_column + 2
+    for row in range(2, sheet.max_row + 1):
+        for column in (quantity_column, quantity_column + 1):
+            sheet.cell(row, column).number_format = "0.###"
+        sheet.cell(row, date_column).number_format = "dd/mm/yyyy"
+    output = BytesIO()
+    workbook.save(output)
+    workbook.close()
+    response = HttpResponse(
+        output.getvalue(),
+        content_type="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+    )
+    filename = timezone.localdate().strftime("ordenes_filtradas_%Y-%m-%d.xlsx")
+    response["Content-Disposition"] = f'attachment; filename="{filename}"'
+    return response
 
 
 def _valid_date(value):
@@ -557,30 +629,81 @@ def process_list(request):
 
 @login_required
 @module_required("universe")
+def download_universe_new_parts_template(request):
+    workbook = Workbook()
+    sheet = workbook.active
+    sheet.title = "Sheet1"
+    sheet.append(NEW_PART_HEADERS)
+    sheet.freeze_panes = "A2"
+    sheet.auto_filter.ref = "A1:D1001"
+    for column, width in {"A": 25, "B": 28, "C": 19, "D": 23}.items():
+        sheet.column_dimensions[column].width = width
+    for cell in sheet[1]:
+        cell.fill = PatternFill("solid", fgColor="0875BD")
+        cell.font = Font(color="FFFFFF", bold=True)
+        cell.alignment = Alignment(horizontal="center")
+    for row in range(2, 1002):
+        sheet.cell(row, 1).number_format = "@"
+        sheet.cell(row, 4).number_format = "0.000000"
+    instructions = workbook.create_sheet("Instrucciones")
+    instructions.column_dimensions["A"].width = 24
+    instructions.column_dimensions["B"].width = 75
+    for item in [
+        ("Campo", "Cómo llenarlo"),
+        ("Número de parte", "Obligatorio. Debe ser nuevo y no repetirse en el archivo ni en el catálogo."),
+        ("Cliente", "Obligatorio. Escribe el nombre del cliente."),
+        ("Diámetro", "Opcional. Escribe el diámetro de la pieza."),
+        ("Peso unitario (kg)", "Opcional. Número mayor o igual a cero."),
+    ]:
+        instructions.append(item)
+    for cell in instructions[1]:
+        cell.fill = PatternFill("solid", fgColor="0875BD")
+        cell.font = Font(color="FFFFFF", bold=True)
+    output = BytesIO()
+    workbook.save(output)
+    workbook.close()
+    response = HttpResponse(
+        output.getvalue(),
+        content_type="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+    )
+    response["Content-Disposition"] = 'attachment; filename="plantilla_piezas_nuevas.xlsx"'
+    return response
+
+
+@login_required
+@module_required("universe")
 def universe(request):
     edit_part = get_object_or_404(Part, pk=request.POST.get("part_id")) if request.method == "POST" and request.POST.get("action") == "edit" else None
     part_form = UniversePartForm(request.POST or None, instance=edit_part)
     import_form = UniverseImportForm(request.POST or None, request.FILES or None)
+    new_parts_form = UniverseNewPartsForm(
+        request.POST if request.POST.get("action") == "import_new" else None,
+        request.FILES if request.POST.get("action") == "import_new" else None,
+    )
     access = access_for(request.user)
-    if request.method == "POST" and request.POST.get("action") in {"add", "edit"} and not access.universe_edit:
+    action = request.POST.get("action")
+    if request.method == "POST" and action in {"add", "edit"} and not access.universe_edit:
         messages.error(request, "No tienes permiso para editar el Universo.")
         return redirect("universe")
-    if request.method == "POST" and request.POST.get("action") == "import" and not access.universe_import:
+    if request.method == "POST" and action in {"import", "import_new"} and not access.universe_import:
         messages.error(request, "No tienes permiso para importar el Universo.")
         return redirect("universe")
-    if request.method == "POST" and request.POST.get("action") == "add" and part_form.is_valid():
+    if request.method == "POST" and action == "add" and part_form.is_valid():
         part = part_form.save(commit=False)
         part.in_universe_ramos = True
+        part.universe_added_at = timezone.now()
         part.save()
-        messages.success(request, "La pieza se agregÃ³ al Universo Ramos Arizpe.")
+        messages.success(request, "La pieza se agregó al Universo Ramos Arizpe.")
         return redirect("universe")
-    if request.method == "POST" and request.POST.get("action") == "edit" and part_form.is_valid():
+    if request.method == "POST" and action == "edit" and part_form.is_valid():
         part = part_form.save(commit=False)
+        if not part.in_universe_ramos:
+            part.universe_added_at = timezone.now()
         part.in_universe_ramos = True
         part.save()
         messages.success(request, "Pieza actualizada correctamente.")
         return redirect("universe")
-    if request.method == "POST" and request.POST.get("action") == "import" and import_form.is_valid():
+    if request.method == "POST" and action == "import" and import_form.is_valid():
         try:
             created, updated, skipped = _import_universe_workbook(import_form.cleaned_data["file"])
         except (ValidationError, BadZipFile, InvalidFileException, KeyError) as exc:
@@ -588,12 +711,24 @@ def universe(request):
         else:
             messages.success(request, f"Universo actualizado: {created} piezas nuevas, {updated} actualizadas y {skipped} filas omitidas.")
             return redirect("universe")
+    if request.method == "POST" and action == "import_new" and new_parts_form.is_valid():
+        try:
+            added = import_new_universe_parts(new_parts_form.cleaned_data["file"])
+        except (ValidationError, BadZipFile, InvalidFileException) as exc:
+            new_parts_form.add_error("file", exc)
+        except IntegrityError:
+            new_parts_form.add_error("file", "Hay un número de parte repetido. Revisa el archivo y vuelve a subirlo.")
+        else:
+            messages.success(request, f"Se agregaron {added} piezas nuevas al Universo Ramos.")
+            return redirect("universe")
     show_all_parts = request.GET.get("catalog") == "all"
     query = request.GET.get("q", "").strip()
     diameter_filter = request.GET.get("diameter", "").strip()
     client_filter = request.GET.get("client", "").strip()
+    uploaded_on = _valid_date(request.GET.get("uploaded_on", ""))
     all_parts = Part.objects.all() if show_all_parts else Part.objects.filter(in_universe_ramos=True)
-    parts = all_parts.select_related("client").order_by("number")
+    parts = all_parts.select_related("client").order_by(
+        F("universe_added_at").asc(nulls_last=True), "id")
     if query:
         parts = parts.filter(Q(number__icontains=query) | Q(diameter__icontains=query) |
                              Q(client__name__icontains=query))
@@ -601,12 +736,16 @@ def universe(request):
         parts = parts.filter(diameter__icontains=diameter_filter)
     if client_filter:
         parts = parts.filter(client__name__icontains=client_filter)
+    if uploaded_on:
+        parts = parts.filter(universe_added_at__date=uploaded_on)
     catalog_parts = list(all_parts.select_related("client"))
     diameters = sorted({diameter_category(part.diameter) for part in catalog_parts if part.diameter}, key=diameter_category_sort_key)
     clients = sorted({part.client.name for part in catalog_parts if part.client}, key=str.casefold)
     return render(request, "operations/universe.html", {
-        "part_form": part_form, "import_form": import_form, "parts": parts, "query": query,
+        "part_form": part_form, "import_form": import_form,
+        "new_parts_form": new_parts_form, "parts": parts, "query": query,
         "diameter_filter": diameter_filter, "client_filter": client_filter,
+        "uploaded_on": uploaded_on.isoformat() if uploaded_on else "",
         "diameters": diameters, "clients": clients,
         "show_all_parts": show_all_parts,
         "catalog_total": Part.objects.count(),
@@ -704,11 +843,13 @@ def _import_universe_workbook(upload):
             if external_id and client.external_id != external_id: client.external_id = external_id; changes.append("external_id")
             if changes: client.save(update_fields=[*changes, "updated_at"])
         part, was_created = Part.objects.get_or_create(
-            number=part_number, defaults={"client": client, "in_universe_ramos": True})
+            number=part_number, defaults={"client": client, "in_universe_ramos": True,
+                                          "universe_added_at": timezone.now()})
         changes = []
         if not part.in_universe_ramos:
             part.in_universe_ramos = True
-            changes.append("in_universe_ramos")
+            part.universe_added_at = timezone.now()
+            changes.extend(["in_universe_ramos", "universe_added_at"])
         diameter = preferred_diameters.get(part_number, "")
         if client and part.client_id != client.pk: part.client = client; changes.append("client")
         if diameter and part.diameter != diameter:

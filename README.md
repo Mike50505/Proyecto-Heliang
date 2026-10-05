@@ -32,6 +32,8 @@ Las cuentas encontradas en `ADMINISTRADORES` se crean con contraseña inutilizab
 
 En la página **Universo Ramos Arizpe**, usa **Actualizar desde Excel** y selecciona `Copia de UNIVERSO RAMOS.XLSX`. La carga usa la hoja `Sheet1 (2)` y relaciona cada número de parte con su cliente y diámetro. El Universo muestra las piezas del archivo; las demás piezas siguen disponibles para órdenes e inventario. Las descripciones no forman parte de este catálogo.
 
+Para dar de alta piezas sin reemplazar el Universo, descarga la plantilla de **Agregar piezas desde Excel**. Llena la hoja `Sheet1` con número de parte y cliente; diámetro y peso son opcionales. La carga rechaza números repetidos, incluso si solo cambia el uso de mayúsculas, y no guarda ninguna fila si el archivo tiene errores. La tabla permite filtrar por fecha de incorporación al Universo y se ordena desde la primera subida hasta la última; los registros sin fecha quedan al final.
+
 ## Docker y PostgreSQL
 
 ```bash

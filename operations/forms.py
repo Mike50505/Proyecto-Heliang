@@ -141,6 +141,15 @@ class UniversePartForm(forms.ModelForm):
         super().__init__(*args, **kwargs)
         self.fields["client"].queryset = Client.objects.order_by("name")
 
+    def clean_number(self):
+        number = self.cleaned_data["number"].strip()
+        existing = Part.objects.filter(number__iexact=number)
+        if self.instance.pk:
+            existing = existing.exclude(pk=self.instance.pk)
+        if existing.exists():
+            raise forms.ValidationError("Este número de parte ya está registrado.")
+        return number
+
 
 class UniverseImportForm(forms.Form):
     file = forms.FileField(label="Archivo Excel del Universo (.xlsx)",
@@ -153,6 +162,11 @@ class UniverseImportForm(forms.Form):
         if value.size > 20 * 1024 * 1024:
             raise forms.ValidationError("El archivo no puede superar 20 MB.")
         return value
+
+
+class UniverseNewPartsForm(UniverseImportForm):
+    file = forms.FileField(label="Plantilla de piezas nuevas (.xlsx)",
+                           widget=forms.ClearableFileInput(attrs={"accept": ".xlsx"}))
 
 
 class SurplusMovementForm(forms.Form):

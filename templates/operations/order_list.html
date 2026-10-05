@@ -2,7 +2,7 @@
 {% block content %}
 <div class="title-row">
   <div><h1>Programas y órdenes</h1><p>Órdenes cargadas y saldo disponible.</p></div>
-  <div><a class="button secondary" href="{% url 'download-completed-programs' %}">Descargar completados</a> <a class="button secondary" href="{% url 'bulk-load-program' %}">Carga masiva</a> <a class="button" href="{% url 'load-program' %}">Nuevo programa</a></div>
+  <div><a class="button secondary" href="{% url 'download-filtered-orders' %}{% if request.GET %}?{{ request.GET.urlencode }}{% endif %}">Descargar órdenes filtradas</a> <a class="button secondary" href="{% url 'download-completed-programs' %}">Descargar completados</a> <a class="button secondary" href="{% url 'bulk-load-program' %}">Carga masiva</a> <a class="button" href="{% url 'load-program' %}">Nuevo programa</a></div>
 </div>
 <form class="filters panel" method="get">
   <label class="grow">Buscar
