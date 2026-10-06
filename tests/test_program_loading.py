@@ -9,7 +9,8 @@ from django.utils import timezone
 from openpyxl import Workbook, load_workbook
 from operations.models import (AuditEvent, Client, Inventory, InventoryBucket, Machine, Movement,
                                Part, Process, ProductionClose, ProductionOrder, WorkInProcess)
-from operations.services import (create_program_order, move_process_material, move_surplus,
+from operations.services import (create_program_order, edit_production_order,
+                                 move_process_material, move_surplus,
                                  resolve_program_client)
 
 
@@ -26,6 +27,153 @@ class ProgramLoadingTests(TestCase):
         self.assertEqual(order.part.client.name, "Cliente Uno")
         self.assertTrue(Movement.objects.filter(folio=order.folio,
                                                 movement_type=Movement.Type.PROGRAM).exists())
+
+    def test_global_limit_sums_all_open_orders_and_excludes_allocated(self):
+        customer = Client.objects.create(code="CAP", name="Cliente Capacidad")
+        part = Part.objects.create(number="P-CAP", client=customer)
+        other_part = Part.objects.create(number="P-OTHER", client=customer)
+        ProductionOrder.objects.create(
+            folio="O-CAP-1", program="A", part=part, quantity=100000,
+            remaining_quantity=100000, status=ProductionOrder.Status.OPEN)
+        ProductionOrder.objects.create(
+            folio="O-CAP-2", program="B", part=part, quantity=80000,
+            remaining_quantity=0, status=ProductionOrder.Status.ALLOCATED)
+        ProductionOrder.objects.create(
+            folio="O-CAP-DONE", program="C", part=part, quantity=90000,
+            remaining_quantity=0, status=ProductionOrder.Status.COMPLETE)
+        ProductionOrder.objects.create(
+            folio="O-OTHER", program="D", part=other_part, quantity=120000,
+            remaining_quantity=0, status=ProductionOrder.Status.COMPLETE)
+
+        third_part = Part.objects.create(number="P-THIRD", client=customer)
+        ProductionOrder.objects.create(
+            folio="O-THIRD", program="E", part=third_part, quantity=34999,
+            remaining_quantity=34999, status=ProductionOrder.Status.OPEN)
+
+        order = create_program_order(
+            client_name=customer.name, client=customer, part_number=other_part.number,
+            program="EXACT", quantity=1)
+        self.assertEqual(order.quantity, 1)
+        with self.assertRaisesRegex(ValidationError, "135000"):
+            create_program_order(
+                client_name=customer.name, client=customer, part_number=third_part.number,
+                program="OVER", quantity=1)
+        self.assertFalse(ProductionOrder.objects.filter(program="OVER").exists())
+
+    def test_edit_order_cannot_increase_global_open_total_above_limit(self):
+        customer = Client.objects.create(code="EDIT-CAP", name="Cliente Edición")
+        part = Part.objects.create(number="P-EDIT-CAP", client=customer)
+        ProductionOrder.objects.create(
+            folio="O-EDIT-BASE", program="BASE", part=part,
+            quantity=100000, remaining_quantity=100000)
+        second_part = Part.objects.create(number="P-EDIT-OTHER", client=customer)
+        order = ProductionOrder.objects.create(
+            folio="O-EDIT", program="EDIT", part=second_part,
+            quantity=34999, remaining_quantity=34999)
+        edit_production_order(
+            order_id=order.pk, program=order.program, part=second_part,
+            quantity=35000)
+        with self.assertRaisesRegex(ValidationError, "135000"):
+            edit_production_order(
+                order_id=order.pk, program=order.program, part=second_part,
+                quantity=35001)
+        order.refresh_from_db()
+        self.assertEqual(order.quantity, 35000)
+
+    def test_different_part_number_does_not_bypass_global_limit(self):
+        customer = Client.objects.create(code="CASE-CAP", name="Cliente Mayúsculas")
+        part = Part.objects.create(number="P-CASE-CAP", client=customer)
+        ProductionOrder.objects.create(
+            folio="O-CASE-CAP", program="BASE", part=part,
+            quantity=135000, remaining_quantity=135000)
+        other_part = Part.objects.create(number="P-CASE-OTHER", client=customer)
+        with self.assertRaisesRegex(ValidationError, "135000"):
+            create_program_order(
+                client_name=customer.name, client=customer,
+                part_number=other_part.number, program="OTHER", quantity=1)
+        self.assertFalse(ProductionOrder.objects.filter(program="OTHER").exists())
+
+    def test_manual_load_shows_capacity_error(self):
+        self.user.is_superuser = True
+        self.user.save(update_fields=["is_superuser"])
+        self.client.force_login(self.user)
+        customer = Client.objects.create(code="CLIENTE-MANUAL", name="Cliente Manual")
+        part = Part.objects.create(number="P-MANUAL-CAP", client=customer)
+        other_part = Part.objects.create(number="P-MANUAL-OTHER", client=customer)
+        ProductionOrder.objects.create(
+            folio="O-MANUAL-CAP", program="BASE", part=part,
+            quantity=135000, remaining_quantity=135000)
+
+        response = self.client.post(reverse("load-program"), {
+            "client": customer.name, "part_number": other_part.number,
+            "program": "EXCESO", "quantity": "1",
+        })
+        self.assertEqual(response.status_code, 200)
+        self.assertContains(response, "tope global de 135000 piezas")
+        self.assertFalse(ProductionOrder.objects.filter(program="EXCESO").exists())
+
+    def test_bulk_preview_rejects_combined_rows_above_global_limit(self):
+        self.user.is_superuser = True
+        self.user.save(update_fields=["is_superuser"])
+        self.client.force_login(self.user)
+        customer = Client.objects.create(code="BULK-CAP", name="Cliente Masivo", external_id="BCAP")
+        part = Part.objects.create(number="P-BULK-CAP", client=customer)
+        other_part = Part.objects.create(number="P-BULK-OTHER", client=customer)
+        third_part = Part.objects.create(number="P-BULK-THIRD", client=customer)
+        ProductionOrder.objects.create(
+            folio="O-BULK-CAP", program="BASE", part=part,
+            quantity=130000, remaining_quantity=130000)
+        workbook = Workbook()
+        sheet = workbook.active
+        sheet.title = "Sheet1"
+        sheet.append(["ID Cliente", "Orden de Produccion", "Linea Prod Clte",
+                      "Fecha de Entrega", "Num. Parte", "Cantidad", "Linea"])
+        sheet.append(["BCAP", "PRIMERA", "", None, other_part.number, 4000, ""])
+        sheet.append(["BCAP", "SEGUNDA", "", None, third_part.number, 2000, ""])
+        output = BytesIO()
+        workbook.save(output)
+
+        response = self.client.post(reverse("bulk-load-program"), {
+            "file": SimpleUploadedFile("capacidad.xlsx", output.getvalue()),
+        })
+        self.assertEqual(response.status_code, 200)
+        self.assertEqual(response.context["preview_token"], "")
+        self.assertContains(response, "Fila 3: La cantidad supera el tope global")
+        self.assertFalse(ProductionOrder.objects.filter(program__in=["PRIMERA", "SEGUNDA"]).exists())
+
+    def test_bulk_confirmation_rechecks_capacity_after_preview(self):
+        self.user.is_superuser = True
+        self.user.save(update_fields=["is_superuser"])
+        self.client.force_login(self.user)
+        customer = Client.objects.create(code="LATE-CAP", name="Cliente Tardío", external_id="LCAP")
+        part = Part.objects.create(number="P-LATE-CAP", client=customer)
+        preview_part = Part.objects.create(number="P-LATE-PREVIEW", client=customer)
+        new_part = Part.objects.create(number="P-LATE-NEW", client=customer)
+        ProductionOrder.objects.create(
+            folio="O-LATE-CAP", program="BASE", part=part,
+            quantity=120000, remaining_quantity=120000)
+        workbook = Workbook()
+        sheet = workbook.active
+        sheet.title = "Sheet1"
+        sheet.append(["ID Cliente", "Orden de Produccion", "Linea Prod Clte",
+                      "Fecha de Entrega", "Num. Parte", "Cantidad", "Linea"])
+        sheet.append(["LCAP", "DESDE-EXCEL", "", None, preview_part.number, 10000, ""])
+        output = BytesIO()
+        workbook.save(output)
+        preview = self.client.post(reverse("bulk-load-program"), {
+            "file": SimpleUploadedFile("capacidad.xlsx", output.getvalue()),
+        })
+        self.assertTrue(preview.context["preview_token"])
+
+        create_program_order(
+            client_name=customer.name, client=customer,
+            part_number=new_part.number, program="INTERMEDIA", quantity=10000)
+        response = self.client.post(reverse("bulk-load-program"), {
+            "action": "confirm", "preview_token": preview.context["preview_token"],
+        })
+        self.assertEqual(response.status_code, 200)
+        self.assertContains(response, "tope global de 135000 piezas")
+        self.assertFalse(ProductionOrder.objects.filter(program="DESDE-EXCEL").exists())
 
     def test_downloaded_bulk_template_has_required_structure(self):
         self.user.is_superuser = True

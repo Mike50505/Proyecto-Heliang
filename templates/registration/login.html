@@ -1,3 +1,16 @@
-{% extends 'base.html' %}{% block title %}Ingresar · MESA{% endblock %}{% block content %}
-<section class="login-card"><h1>Control de producción</h1><p>Ingresa con tu cuenta autorizada.</p>
-<form method="post">{% csrf_token %}{{ form.as_p }}<button type="submit">Ingresar</button></form></section>{% endblock %}
+{% extends 'base.html' %}
+{% block title %}Ingresar · MESA{% endblock %}
+{% block content %}
+<div class="login-shell">
+  <div class="login-intro">
+    <span class="eyebrow">MESA PRODUCCIÓN</span>
+    <h1>Todo tu proceso.<br>En un solo lugar.</h1>
+    <p>Accede a programas, máquinas e inventario con tu cuenta de trabajo.</p>
+  </div>
+  <section class="login-card" aria-labelledby="login-title">
+    <h2 id="login-title">Inicia sesión</h2>
+    <p>Ingresa tus datos para continuar.</p>
+    <form method="post">{% csrf_token %}{{ form.as_p }}<button type="submit">Ingresar</button></form>
+  </section>
+</div>
+{% endblock %}

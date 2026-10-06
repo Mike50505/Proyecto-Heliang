@@ -55,27 +55,27 @@ class OrderChoiceField(forms.ModelChoiceField):
         diameter = (f" · diámetro {format_diameter_fraction(obj.part.diameter)}"
                     if obj.part.diameter else "")
         return (f"{obj.folio} · {obj.program} · {obj.part.number}{diameter}"
-                f" · saldo {obj.remaining_quantity}")
+                f" · saldo {format(obj.remaining_quantity.normalize(), 'f')}")
 
 
     def label_from_instance(self, obj):
         diameter = (f" · diámetro {format_diameter_fraction(obj.part.diameter)}"
                     if obj.part.diameter else "")
         priority = f"PRIORIDAD {obj.priority:02d} · " if obj.priority else ""
-        return f"{priority}{obj.folio} · {obj.program} · {obj.part.number}{diameter} · saldo {obj.remaining_quantity}"
+        return f"{priority}{obj.folio} · {obj.program} · {obj.part.number}{diameter} · saldo {format(obj.remaining_quantity.normalize(), 'f')}"
 
 
 class WorkChoiceField(forms.ModelChoiceField):
     def label_from_instance(self, obj):
         return (f"{obj.folio} · {obj.order.program} · {obj.order.part.number} · "
-                f"{obj.machine.code} · saldo {obj.remaining_quantity}")
+                f"{obj.machine.code} · saldo {format(obj.remaining_quantity.normalize(), 'f')}")
 
 
 class ProgramOrderForm(forms.Form):
     client = forms.CharField(label="Cliente", max_length=120)
     part_number = forms.CharField(label="N.º de parte", max_length=80)
     program = forms.CharField(label="Programa / orden del cliente", max_length=80)
-    quantity = forms.DecimalField(label="Cantidad", min_value=0.001, decimal_places=3)
+    quantity = forms.IntegerField(label="Cantidad", min_value=1)
     required_date = forms.DateField(label="Fecha de entrega", required=False,
                                     widget=forms.DateInput(attrs={"type": "date"}))
     line = forms.CharField(label="Línea del cliente", max_length=80, required=False)
@@ -86,6 +86,7 @@ class ProgramOrderForm(forms.Form):
 
 
 class ProductionOrderEditForm(forms.ModelForm):
+    quantity = forms.IntegerField(label="Cantidad total", min_value=1)
     class Meta:
         model = ProductionOrder
         fields = ("program", "part", "quantity", "required_date", "line", "priority")
@@ -178,7 +179,7 @@ class SurplusMovementForm(forms.Form):
     ])
     part = forms.ModelChoiceField(label="N.º de parte", queryset=Part.objects.none())
     program = forms.CharField(label="Programa destino", max_length=100, required=False)
-    quantity = forms.DecimalField(label="Cantidad", min_value=0.001, decimal_places=3)
+    quantity = forms.IntegerField(label="Cantidad", min_value=1)
     comment = forms.CharField(label="Comentarios", required=False,
                               widget=forms.Textarea(attrs={"rows": 2}))
 
@@ -198,7 +199,7 @@ class ProcessMovementForm(forms.Form):
     source_process = forms.ModelChoiceField(label="Proceso que envía", queryset=Process.objects.none())
     destination_process = forms.ModelChoiceField(label="Proceso que recibe", queryset=Process.objects.none())
     program = forms.CharField(label="Programa", max_length=100)
-    quantity = forms.DecimalField(label="Cantidad", min_value=0.001, decimal_places=3)
+    quantity = forms.IntegerField(label="Cantidad", min_value=1)
     comment = forms.CharField(label="Comentarios", required=False,
                               widget=forms.Textarea(attrs={"rows": 2}))
 
@@ -219,7 +220,7 @@ class ProcessMovementForm(forms.Form):
 class StartProductionForm(forms.Form):
     order = OrderChoiceField(label="Orden abierta", queryset=ProductionOrder.objects.none())
     machine = forms.ModelChoiceField(label="Máquina disponible", queryset=Machine.objects.none())
-    quantity = forms.DecimalField(label="Cantidad", min_value=0.001, decimal_places=3)
+    quantity = forms.IntegerField(label="Cantidad", min_value=1)
     def __init__(self, *args, **kwargs):
         super().__init__(*args, **kwargs)
         self.fields["order"].queryset = ProductionOrder.objects.filter(status=ProductionOrder.Status.OPEN).select_related("part").annotate(
@@ -231,8 +232,17 @@ class StartProductionForm(forms.Form):
 
 class CloseProductionForm(forms.Form):
     work_item = WorkChoiceField(label="Orden procesando", queryset=WorkInProcess.objects.none())
-    quantity = forms.DecimalField(label="Cantidad terminada", min_value=0.001, decimal_places=3)
+    quantity = forms.IntegerField(label="Cantidad terminada", min_value=1)
     comment = forms.CharField(label="Comentario", widget=forms.Textarea(attrs={"rows": 3}), required=False)
     def __init__(self, *args, **kwargs):
         super().__init__(*args, **kwargs)
         self.fields["work_item"].queryset = WorkInProcess.objects.filter(status=WorkInProcess.Status.ACTIVE).select_related("order", "machine")
+
+
+class ReleaseProductionForm(forms.Form):
+    work_item = WorkChoiceField(label="Orden procesando", queryset=WorkInProcess.objects.none())
+
+    def __init__(self, *args, **kwargs):
+        super().__init__(*args, **kwargs)
+        self.fields["work_item"].queryset = WorkInProcess.objects.filter(
+            status=WorkInProcess.Status.ACTIVE).select_related("order", "machine")

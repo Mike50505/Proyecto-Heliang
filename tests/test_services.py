@@ -8,7 +8,7 @@ from datetime import datetime
 from operations.models import (Client, Machine, Part, ProductionClose,
                                ProductionOrder, WorkInProcess)
 from operations.services import (close_production, edit_production_order,
-                                 next_folio, start_production)
+                                 next_folio, release_production, start_production)
 
 @pytest.fixture
 def data(db):
@@ -34,6 +34,33 @@ def test_start_and_partial_close_preserve_balances(data):
     assert order.remaining_quantity == 85
     assert order.status == ProductionOrder.Status.OPEN
     assert close.weight_kg == Decimal("3.750")
+
+
+@pytest.mark.django_db
+def test_release_returns_remaining_pieces_without_creating_a_close(data):
+    order, machine, employee = data
+    work = start_production(order=order, machine=machine, quantity=40, employee=employee)
+    released = release_production(work_item=work, user=employee)
+    work.refresh_from_db()
+    order.refresh_from_db()
+    assert released == 40
+    assert work.status == WorkInProcess.Status.CLOSED
+    assert work.remaining_quantity == 0
+    assert order.remaining_quantity == 100
+    assert order.status == ProductionOrder.Status.OPEN
+    assert not ProductionClose.objects.filter(work_item=work).exists()
+    with pytest.raises(ValidationError):
+        release_production(work_item=work, user=employee)
+
+
+@pytest.mark.django_db
+def test_start_and_close_reject_fractional_pieces(data):
+    order, machine, employee = data
+    with pytest.raises(ValidationError):
+        start_production(order=order, machine=machine, quantity=Decimal("0.1"))
+    work = start_production(order=order, machine=machine, quantity=10)
+    with pytest.raises(ValidationError):
+        close_production(work_item=work, quantity=Decimal("0.1"))
 
 @pytest.mark.django_db
 def test_machine_cannot_have_two_active_jobs(data):

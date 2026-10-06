@@ -3,7 +3,7 @@ from datetime import date, time
 from decimal import Decimal
 from django.core.exceptions import ValidationError
 from django.db import transaction
-from django.db.models import F
+from django.db.models import F, Sum
 from django.utils import timezone
 from .formatting import diameter_category
 from .models import (AuditEvent, Client, Inventory, InventoryBucket, Movement, Part,
@@ -12,6 +12,12 @@ from .models import (AuditEvent, Client, Inventory, InventoryBucket, Movement, P
 
 SHIFT_B_START = time(16, 36)
 SHIFT_A_START = time(6, 0)
+OPEN_ORDER_PIECE_LIMIT = Decimal("135000")
+
+
+def _require_whole_quantity(quantity):
+    if not quantity.is_finite() or quantity != quantity.to_integral_value():
+        raise ValidationError("La cantidad de piezas debe ser un número entero.")
 
 
 @transaction.atomic
@@ -47,11 +53,39 @@ def _acquire_named_lock(key):
     return lock
 
 
+def open_order_total(*, exclude_order_id=None):
+    orders = ProductionOrder.objects.filter(status=ProductionOrder.Status.OPEN)
+    if exclude_order_id is not None:
+        orders = orders.exclude(pk=exclude_order_id)
+    return orders.aggregate(total=Sum("quantity"))["total"] or Decimal("0")
+
+
+def check_open_order_capacity(*, quantity, current_total=None, pending=0,
+                              exclude_order_id=None):
+    quantity = Decimal(quantity)
+    current_total = (open_order_total(exclude_order_id=exclude_order_id)
+                     if current_total is None else Decimal(current_total))
+    available = OPEN_ORDER_PIECE_LIMIT - current_total - Decimal(pending)
+    if quantity > available:
+        current_text = format((current_total + Decimal(pending)).normalize(), "f")
+        available_text = format(max(available, Decimal("0")).normalize(), "f")
+        raise ValidationError(
+            "La cantidad supera el tope global de 135000 piezas en órdenes abiertas. "
+            f"Hay {current_text} piezas y solo quedan {available_text} disponibles.")
+
+
+def _lock_open_order_capacity():
+    _acquire_named_lock("open-order-capacity")
+
+
 @transaction.atomic
 def edit_production_order(*, order_id, program, part, quantity, required_date=None,
                           line="", priority=None, user=None):
     order = ProductionOrder.objects.select_for_update().get(pk=order_id)
     quantity = Decimal(quantity)
+    _require_whole_quantity(quantity)
+    if quantity <= 0:
+        raise ValidationError("La cantidad debe ser mayor que cero.")
     committed_quantity = order.quantity - order.remaining_quantity
     has_production = order.work_items.exists()
     if has_production and part.pk != order.part_id:
@@ -60,6 +94,12 @@ def edit_production_order(*, order_id, program, part, quantity, required_date=No
         raise ValidationError(
             f"La cantidad no puede ser menor que {committed_quantity:g}; "
             "esa cantidad ya fue asignada.")
+
+    new_remaining = quantity - committed_quantity
+    will_be_open = order.status != ProductionOrder.Status.CANCELLED and new_remaining > 0
+    if will_be_open and (order.status != ProductionOrder.Status.OPEN or quantity > order.quantity):
+        _lock_open_order_capacity()
+        check_open_order_capacity(quantity=quantity, exclude_order_id=order.pk)
 
     previous_priority = order.priority
     order.program = program.strip()
@@ -120,6 +160,7 @@ def resolve_program_client(*, client_reference, part_number):
 def create_program_order(*, client_name, part_number, program, quantity, employee=None,
                          required_date=None, line="", priority=None, comment="", user=None, client=None):
     quantity = Decimal(quantity)
+    _require_whole_quantity(quantity)
     if quantity <= 0:
         raise ValidationError("La cantidad debe ser mayor que cero.")
     if priority is not None and int(priority) < 1:
@@ -133,6 +174,8 @@ def create_program_order(*, client_name, part_number, program, quantity, employe
         raise ValidationError(
             f"La pieza {part.number} pertenece a otro cliente. "
             "Corrige el catálogo antes de cargar la orden.")
+    _lock_open_order_capacity()
+    check_open_order_capacity(quantity=quantity)
     if priority is not None:
         _acquire_named_lock("production-order-priorities")
         ProductionOrder.objects.select_for_update().filter(priority__gte=int(priority)).update(priority=F("priority") + 1)
@@ -262,6 +305,7 @@ def delete_production_orders(*, order_ids, user=None, source="single"):
 @transaction.atomic
 def move_surplus(*, part, action, quantity, employee=None, program="", comment="", user=None):
     quantity = Decimal(quantity)
+    _require_whole_quantity(quantity)
     inventory, _ = Inventory.objects.select_for_update().get_or_create(part=part)
     if action == "ALLOCATE":
         if inventory.surplus < quantity:
@@ -292,6 +336,7 @@ def move_surplus(*, part, action, quantity, employee=None, program="", comment="
 def move_process_material(*, part, source_process, destination_process, program,
                           quantity, employee=None, comment="", user=None):
     quantity = Decimal(quantity)
+    _require_whole_quantity(quantity)
     inventory, _ = Inventory.objects.select_for_update().get_or_create(part=part)
     source, _ = InventoryBucket.objects.select_for_update().get_or_create(
         inventory=inventory, kind="PROCESS", name=source_process.name)
@@ -322,6 +367,7 @@ def start_production(*, order, machine, quantity, employee=None, user=None, when
     order = ProductionOrder.objects.select_for_update().get(pk=order.pk)
     machine = Machine.objects.select_for_update().get(pk=machine.pk)
     quantity = Decimal(quantity)
+    _require_whole_quantity(quantity)
     if order.status != ProductionOrder.Status.OPEN or quantity <= 0 or quantity > order.remaining_quantity:
         raise ValidationError("La cantidad debe ser positiva y no superar el saldo abierto.")
     if not machine.active:
@@ -342,10 +388,33 @@ def start_production(*, order, machine, quantity, employee=None, user=None, when
 
 
 @transaction.atomic
+def release_production(*, work_item, user=None):
+    work = WorkInProcess.objects.select_for_update().select_related("machine").get(pk=work_item.pk)
+    if work.status != WorkInProcess.Status.ACTIVE or work.remaining_quantity <= 0:
+        raise ValidationError("El número en proceso ya no tiene piezas para devolver.")
+    order = ProductionOrder.objects.select_for_update().get(pk=work.order_id)
+    released = work.remaining_quantity
+    if order.remaining_quantity + released > order.quantity:
+        raise ValidationError("La devolución supera la cantidad total de la orden.")
+    work.remaining_quantity = 0
+    work.status = WorkInProcess.Status.CLOSED
+    work.save(update_fields=["remaining_quantity", "status", "updated_at"])
+    order.remaining_quantity += released
+    order.status = ProductionOrder.Status.OPEN
+    order.save(update_fields=["remaining_quantity", "status", "updated_at"])
+    AuditEvent.objects.create(
+        user=user, action="RELEASE_PRODUCTION", entity="WorkInProcess", entity_id=work.folio,
+        data={"order": order.folio, "released_quantity": str(released),
+              "machine": work.machine.code})
+    return released
+
+
+@transaction.atomic
 def close_production(*, work_item, quantity, employee=None, user=None, comment="", when=None):
     when = when or timezone.now()
     work = WorkInProcess.objects.select_for_update().select_related("order__part").get(pk=work_item.pk)
     quantity = Decimal(quantity)
+    _require_whole_quantity(quantity)
     if work.status != WorkInProcess.Status.ACTIVE or quantity <= 0 or quantity > work.remaining_quantity:
         raise ValidationError("La cantidad debe ser positiva y no superar el saldo en proceso.")
     local_time = timezone.localtime(when).time()

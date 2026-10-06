@@ -94,6 +94,8 @@ main:has(.bulk-preview-card) { max-width:none; padding-inline:2vw; }
 .action-card form > p { margin:0; }
 .action-card form > p:first-of-type { grid-column:1/-1; }
 .action-card .form-actions,.action-card .errorlist { grid-column:1/-1; }
+.close-card .form-actions { flex-wrap:wrap; }
+.close-card .form-actions button.secondary { background:#e4edf3; color:#24435c; }
 .start-card { border-top:4px solid var(--cyan); }
 .close-card { border-top:4px solid var(--amber); }
 .close-card button { background:var(--amber); }

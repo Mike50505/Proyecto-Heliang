@@ -1,5 +1,6 @@
 {% extends 'base.html' %}{% load static %}{% block title %}Cargar programa · MESA{% endblock %}{% block content %}
 <div class="title-row"><div><span class="eyebrow">PROGRAMACIÓN</span><h1>Carga de programa</h1><p>Registra una orden manualmente o importa la plantilla de producción.</p></div><a class="button secondary" href="{% url 'order-list' %}">Ver programas</a></div>
+<p class="capacity-note">Máximo 135000 piezas en total, sumando las cantidades de todas las órdenes abiertas.</p>
 <div class="tabs"><a class="{% if active_tab == 'single' %}active{% endif %}" href="{% url 'load-program' %}">Carga individual</a><a class="{% if active_tab == 'bulk' %}active{% endif %}" href="{% url 'bulk-load-program' %}">Carga masiva</a></div>
 {% if active_tab == 'single' %}
 <section class="form-card wide"><div class="form-heading"><div><h2>Nuevo programa</h2><p>Completa la información de la orden y del empleado responsable.</p></div><span class="step-badge">Individual</span></div><form method="post">{% csrf_token %}<div class="form-grid">{{ form.as_div }}</div><div class="form-actions"><a class="button secondary" href="{% url 'dashboard' %}">Cancelar</a><button type="submit">Cargar programa</button></div></form></section>

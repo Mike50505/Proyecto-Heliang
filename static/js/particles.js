@@ -2,15 +2,15 @@
   'use strict';
 
   const DEFAULTS = Object.freeze({
-    count:950,
-    mobileCount:140,
+    count:560,
+    mobileCount:90,
     densityArea:1550,
-    colors:['#4967ff', '#7156dd', '#bd4590', '#ff4b62', '#ff843c', '#ffb900'],
-    darkColors:['#8195ff', '#a28aff', '#e17bc0', '#ff7b8b', '#ffab77', '#ffd268'],
-    minSize:0.8,
-    maxSize:1.5,
-    minOpacity:0.55,
-    maxOpacity:0.95,
+    colors:['#005bb5', '#0071e3', '#1685ed', '#4a7aa8'],
+    darkColors:['#2997ff', '#64d2ff', '#0a84ff', '#78baff'],
+    minSize:1.4,
+    maxSize:2.7,
+    minOpacity:0.72,
+    maxOpacity:1,
     influenceRadius:520,
     attraction:0.65,       // Spring acceleration per second squared.
     damping:1.15,          // Velocity decay per second (not per frame).

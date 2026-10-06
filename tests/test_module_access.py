@@ -12,6 +12,35 @@ class ModuleAccessTests(TestCase):
         self.user = get_user_model().objects.create_user("operator", password="secret")
         self.client.force_login(self.user)
 
+    def test_heliang_can_return_active_work_to_available_orders(self):
+        access = ModuleAccess.objects.get(user=self.user)
+        access.heliang = True
+        access.save(update_fields=["heliang"])
+        customer = Client.objects.create(code="RET", name="Cliente Retorno")
+        part = Part.objects.create(number="P-RET", client=customer, diameter="1/2")
+        order = ProductionOrder.objects.create(
+            folio="O-RET", program="S40", part=part, quantity=20,
+            remaining_quantity=0, status=ProductionOrder.Status.ALLOCATED)
+        machine = Machine.objects.create(code="M-RET")
+        work = WorkInProcess.objects.create(
+            folio="P-RET", order=order, machine=machine,
+            initial_quantity=20, remaining_quantity=20, started_at=timezone.now())
+
+        page = self.client.get(reverse("heliang"))
+        self.assertContains(page, "Regresar a órdenes disponibles")
+        self.assertContains(page, "Cliente Retorno")
+        self.assertContains(page, "1/2")
+        response = self.client.post(reverse("heliang"), {
+            "action": "release", "close-work_item": work.pk,
+        })
+        self.assertRedirects(response, reverse("heliang"))
+        order.refresh_from_db()
+        work.refresh_from_db()
+        self.assertEqual(order.remaining_quantity, 20)
+        self.assertEqual(order.status, ProductionOrder.Status.OPEN)
+        self.assertEqual(work.status, WorkInProcess.Status.CLOSED)
+        self.assertFalse(ProductionClose.objects.filter(work_item=work).exists())
+
     def test_operator_without_access_is_redirected(self):
         dashboard = self.client.get(reverse("dashboard"))
         self.assertContains(dashboard, "theme-toggle")

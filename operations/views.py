@@ -24,7 +24,7 @@ from openpyxl.utils.datetime import to_excel
 from openpyxl.worksheet.datavalidation import DataValidation
 from openpyxl.utils.exceptions import InvalidFileException
 from .access import access_for, module_required
-from .forms import (BulkProgramForm, CloseProductionForm, ProcessMovementForm,
+from .forms import (BulkProgramForm, CloseProductionForm, ReleaseProductionForm, ProcessMovementForm,
                     ProductionOrderEditForm, ProgramOrderForm, StartProductionForm,
                     SurplusMovementForm, UniverseImportForm, UniverseNewPartsForm, UniversePartForm)
 from .formatting import (diameter_category, diameter_category_sort_key,
@@ -33,7 +33,8 @@ from .models import (AuditEvent, Client, Inventory, InventoryBucket, Machine, Mo
                      ProductionClose, ProductionOrder, WorkInProcess, ProgramImportPreview)
 from .security import MAX_XLSX_ROWS, spreadsheet_safe, validate_xlsx_archive
 from .universe_upload import HEADERS as NEW_PART_HEADERS, import_new_universe_parts
-from .services import (close_production, create_program_order, move_process_material, move_surplus,
+from .services import (open_order_total, check_open_order_capacity,
+                       close_production, release_production, create_program_order, move_process_material, move_surplus,
                        delete_production_orders, edit_production_order, resolve_program_client,
                        set_production_order_priority, reorder_production_order_within_diameter, start_production)
 
@@ -164,7 +165,7 @@ def download_filtered_orders(request):
     date_column = quantity_column + 2
     for row in range(2, sheet.max_row + 1):
         for column in (quantity_column, quantity_column + 1):
-            sheet.cell(row, column).number_format = "0.###"
+            sheet.cell(row, column).number_format = "0.##"
         sheet.cell(row, date_column).number_format = "dd/mm/yyyy"
     output = BytesIO()
     workbook.save(output)
@@ -353,13 +354,13 @@ def download_program_template(request):
         sheet.column_dimensions[column].width = width
     for row in range(2, 1001):
         sheet.cell(row, 4).number_format = "dd/mm/yyyy"
-        sheet.cell(row, 6).number_format = "0.###"
+        sheet.cell(row, 6).number_format = "0"
 
     positive_quantity = DataValidation(
-        type="decimal", operator="greaterThan", formula1="0", allow_blank=True)
-    positive_quantity.error = "La cantidad debe ser un número mayor que cero."
+        type="whole", operator="greaterThan", formula1="0", allow_blank=True)
+    positive_quantity.error = "La cantidad debe ser un número entero mayor que cero."
     positive_quantity.errorTitle = "Cantidad inválida"
-    positive_quantity.prompt = "Captura una cantidad mayor que cero."
+    positive_quantity.prompt = "Captura una cantidad entera mayor que cero."
     positive_quantity.promptTitle = "Cantidad"
     positive_quantity.showErrorMessage = True
     positive_quantity.showInputMessage = True
@@ -376,7 +377,7 @@ def download_program_template(request):
         ("Linea Prod Clte", "Línea de producción del cliente. Opcional."),
         ("Fecha de Entrega", "Fecha en formato dd/mm/aaaa. Opcional."),
         ("Num. Parte", "Número de parte. Obligatorio."),
-        ("Cantidad", "Cantidad numérica mayor que cero. Obligatorio."),
+        ("Cantidad", "Cantidad entera mayor que cero. El total de todas las órdenes abiertas no puede superar 135000 piezas."),
         ("Linea", "Línea interna asignada al programa. Opcional; tiene prioridad sobre Linea Prod Clte."),
     ]
     for description in descriptions:
@@ -447,7 +448,7 @@ def download_completed_programs(request):
         sheet.cell(row, 9).number_format = "dd/mm/yyyy"
         sheet.cell(row, 12).number_format = "dd/mm/yyyy hh:mm"
         for column in (6, 7, 8):
-            sheet.cell(row, column).number_format = "0.###"
+            sheet.cell(row, column).number_format = "0.##"
 
     output = BytesIO()
     workbook.save(output)
@@ -554,6 +555,9 @@ def bulk_load_program(request):
                 if not client or not program or not part_number or quantity <= 0:
                     errors.append(f"Fila {row_number}: cliente, orden, parte y cantidad son obligatorios.")
                     continue
+                if quantity != quantity.to_integral_value():
+                    errors.append(f"Fila {row_number}: la cantidad de piezas debe ser entera.")
+                    continue
                 if isinstance(required, datetime):
                     required = required.date()
                 elif not isinstance(required, date):
@@ -561,6 +565,8 @@ def bulk_load_program(request):
                 rows.append((row_number, client, program, line, required, part_number, quantity))
             workbook.close()
             preview, payload_rows = [], []
+            current_total = open_order_total()
+            pending_total = Decimal("0")
             added = 0
             for row_number, client, program, line, required, part_number, quantity in rows:
                 item = {"row_number": row_number, "reference": client, "program": program,
@@ -570,6 +576,10 @@ def bulk_load_program(request):
                     resolved_client = resolve_program_client(client_reference=client, part_number=part_number)
                     item["client_id"] = resolved_client.pk
                     item["client_name"] = resolved_client.name
+                    check_open_order_capacity(
+                        quantity=quantity, current_total=current_total,
+                        pending=pending_total)
+                    pending_total += quantity
                     item["status"] = "Agregar como orden nueva"
                     added += 1
                     payload_rows.append(item.copy())
@@ -936,6 +946,9 @@ def heliang(request):
         request.POST if action == "close" else None,
         prefix="close", initial=close_initial,
     )
+    release_form = ReleaseProductionForm(
+        request.POST if action == "release" else None, prefix="close",
+    )
     if request.method == "POST" and action == "start" and start_form.is_valid():
         employee = request.user
         try:
@@ -959,6 +972,18 @@ def heliang(request):
         else:
             messages.success(request, f"Producción cerrada con el folio {close.folio}.")
             return redirect("heliang")
+    if request.method == "POST" and action == "release":
+        if release_form.is_valid():
+            try:
+                released = release_production(
+                    work_item=release_form.cleaned_data["work_item"], user=request.user)
+            except ValidationError as exc:
+                close_form.add_error(None, exc)
+            else:
+                messages.success(request, f"{_quantity_text(released)} piezas devueltas a órdenes disponibles.")
+                return redirect("heliang")
+        else:
+            close_form.add_error(None, "Selecciona un número en proceso activo para devolverlo.")
     if False:  # Pausing is handled by the single release button in the close form.
         try:
             work = pause_production(work_item=pause_form.cleaned_data["work_item"],
@@ -1010,7 +1035,9 @@ def heliang(request):
     for order in open_orders:
         order.part.diameter = format_diameter_fraction(order.part.diameter)
     active_items = WorkInProcess.objects.filter(status=WorkInProcess.Status.ACTIVE).select_related(
-        "order__part", "machine", "started_by").order_by("started_at")
+        "order__part__client", "machine", "started_by").order_by("started_at")
+    for work in active_items:
+        work.order.part.diameter = format_diameter_fraction(work.order.part.diameter)
     recent_closes = ProductionClose.objects.select_related(
         "work_item__order__part", "work_item__machine", "closed_by").order_by("-closed_at")[:30]
     occupied_ids = set(active_items.values_list("machine_id", flat=True))
@@ -1028,7 +1055,7 @@ def heliang(request):
 
 
 def _quantity_text(value):
-    return format(value, "f").rstrip("0").rstrip(".")
+    return format(Decimal(value).normalize(), "f")
 
 
 @login_required
@@ -1255,7 +1282,7 @@ def report_csv(request):
     for row in rows[:10000]:
         writer.writerow([spreadsheet_safe(row.folio), spreadsheet_safe(row.work_item.order.folio),
             spreadsheet_safe(row.work_item.order.program), spreadsheet_safe(row.work_item.order.part.number),
-            row.quantity, spreadsheet_safe(row.work_item.machine.code), row.closed_at,
-            spreadsheet_safe(row.shift), row.weight_kg,
+            format(row.quantity.normalize(), "f"), spreadsheet_safe(row.work_item.machine.code), row.closed_at,
+            spreadsheet_safe(row.shift), f"{row.weight_kg:.2f}",
             spreadsheet_safe(row.closed_by or ""), spreadsheet_safe(row.comment)])
     return response
