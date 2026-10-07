@@ -56,6 +56,7 @@ def _orders_matching_list_filters(request, limit=500):
     orders = ProductionOrder.objects.select_related("part", "part__client")
     query = request.GET.get("q", "").strip()
     status = request.GET.get("status", "").strip()
+    client_filter = request.GET.get("client", "").strip()
     start = _valid_date(request.GET.get("start"))
     end = _valid_date(request.GET.get("end"))
     priority_only = request.GET.get("priority") == "1"
@@ -64,6 +65,10 @@ def _orders_matching_list_filters(request, limit=500):
             Q(folio__icontains=query) | Q(program__icontains=query) |
             Q(part__number__icontains=query) | Q(part__client__name__icontains=query)
         )
+    if client_filter.isdecimal():
+        orders = orders.filter(part__client_id=client_filter)
+    else:
+        client_filter = ""
     valid_statuses = {value for value, _ in ProductionOrder.Status.choices}
     if status in valid_statuses:
         orders = orders.filter(status=status)
@@ -103,7 +108,8 @@ def _orders_matching_list_filters(request, limit=500):
         ordered = orders.order_by("-created_at")
         visible_orders = list(ordered[:limit] if limit is not None else ordered)
     return visible_orders, {
-        "query": query, "status": status, "priority_only": priority_only,
+        "query": query, "status": status, "client_filter": client_filter,
+        "priority_only": priority_only,
         "start": start.isoformat() if start else "",
         "end": end.isoformat() if end else "",
     }
@@ -116,6 +122,9 @@ def order_list(request):
     return render(request, "operations/order_list.html", {
         "orders": visible_orders, **filters,
         "status_choices": ProductionOrder.Status.choices,
+        "clients": Client.objects.filter(
+            pk__in=ProductionOrder.objects.values("part__client_id")
+        ).order_by("name", "pk"),
     })
 
 
@@ -1004,11 +1013,23 @@ def heliang(request):
         else:
             messages.success(request, f"Producción {work.folio} reanudada en {work.machine.code}.")
             return redirect("heliang")
+    order_clients = Client.objects.filter(
+        pk__in=ProductionOrder.objects.filter(status=ProductionOrder.Status.OPEN).values("part__client_id")
+    ).order_by("name", "pk")
+    work_clients = Client.objects.filter(
+        pk__in=WorkInProcess.objects.filter(status=WorkInProcess.Status.ACTIVE).values("order__part__client_id")
+    ).order_by("name", "pk")
+    order_client_filter = request.GET.get("order_client", "").strip()
+    work_client_filter = request.GET.get("work_client", "").strip()
     open_orders_query = ProductionOrder.objects.filter(status=ProductionOrder.Status.OPEN).select_related(
         "part", "part__client").annotate(
             priority_sort=Case(When(priority__isnull=True, then=Value(2147483647)),
                                default="priority", output_field=IntegerField())
         ).order_by("priority_sort", "required_date", "created_at")
+    if order_client_filter.isdecimal():
+        open_orders_query = open_orders_query.filter(part__client_id=order_client_filter)
+    else:
+        order_client_filter = ""
     priority_orders = list(open_orders_query.filter(priority__isnull=False)[:100])
     priority_orders.sort(key=lambda order: (
         diameter_category_sort_key(diameter_category(order.part.diameter)),
@@ -1034,13 +1055,18 @@ def heliang(request):
     open_orders = list(open_orders_query[:100])
     for order in open_orders:
         order.part.diameter = format_diameter_fraction(order.part.diameter)
-    active_items = WorkInProcess.objects.filter(status=WorkInProcess.Status.ACTIVE).select_related(
+    all_active_items = WorkInProcess.objects.filter(status=WorkInProcess.Status.ACTIVE).select_related(
         "order__part__client", "machine", "started_by").order_by("started_at")
+    occupied_ids = set(all_active_items.values_list("machine_id", flat=True))
+    active_items = all_active_items
+    if work_client_filter.isdecimal():
+        active_items = active_items.filter(order__part__client_id=work_client_filter)
+    else:
+        work_client_filter = ""
     for work in active_items:
         work.order.part.diameter = format_diameter_fraction(work.order.part.diameter)
     recent_closes = ProductionClose.objects.select_related(
         "work_item__order__part", "work_item__machine", "closed_by").order_by("-closed_at")[:30]
-    occupied_ids = set(active_items.values_list("machine_id", flat=True))
     machines = Machine.objects.filter(active=True).select_related("process").order_by("code")
     machine_rows = [{"machine": machine, "occupied": machine.pk in occupied_ids}
                     for machine in machines]
@@ -1051,7 +1077,9 @@ def heliang(request):
         "order_balances": {str(order.pk): str(order.remaining_quantity) for order in open_orders},
         "active_items": active_items, "recent_closes": recent_closes,
         "machine_rows": machine_rows, "selected_order": selected_order,
-        "selected_work": selected_work})
+        "selected_work": selected_work, "order_clients": order_clients,
+        "work_clients": work_clients, "order_client_filter": order_client_filter,
+        "work_client_filter": work_client_filter})
 
 
 def _quantity_text(value):

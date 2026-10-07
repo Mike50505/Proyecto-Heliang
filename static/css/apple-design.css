@@ -291,6 +291,10 @@ html[data-theme="dark"] .board-column.active, html[data-theme="dark"] .priority-
 .action-card { padding: 30px; }
 .close-card button { background: var(--blue); }
 .board-title { padding: 22px 26px; }
+.heliang-client-filter { display: flex; align-items: center; gap: 10px; flex-wrap: wrap; padding: 0 26px 16px; }
+.heliang-client-filter label { color: var(--text); font-size: 13px; font-weight: 600; }
+.heliang-client-filter select { flex: 1 1 180px; min-width: 0; }
+.heliang-client-filter button { flex: 0 0 auto; }
 .board-title h2 { font-size: 23px; }
 .board-title p { color: var(--muted); font-size: 13px; }
 .board-column { overflow: hidden; }

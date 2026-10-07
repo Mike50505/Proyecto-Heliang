@@ -11,6 +11,9 @@
   <label>Estado
     <select name="status"><option value="">Todos</option>{% for value, label in status_choices %}<option value="{{ value }}" {% if status == value %}selected{% endif %}>{{ label }}</option>{% endfor %}</select>
   </label>
+  <label>Cliente
+    <select name="client"><option value="">Todos los clientes</option>{% for client in clients %}<option value="{{ client.pk }}"{% if client_filter == client.pk|stringformat:'s' %} selected{% endif %}>{{ client.name }}</option>{% endfor %}</select>
+  </label>
   <label>Requerida desde <input type="date" name="start" value="{{ start }}"></label>
   <label>Requerida hasta <input type="date" name="end" value="{{ end }}"></label>
   <label class="priority-toggle"><input type="checkbox" name="priority" value="1" {% if priority_only %}checked{% endif %}><span class="toggle-track" aria-hidden="true"><i></i></span><span>Solo prioridades</span></label>
