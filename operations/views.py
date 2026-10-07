@@ -1108,9 +1108,7 @@ def _line_dashboard_context():
                 (work.initial_quantity - work.remaining_quantity) / work.initial_quantity * 100)))
         machine_rows.append({"machine": machine, "work": work, "progress": progress})
     today_closes = ProductionClose.objects.filter(closed_at__date=today)
-    today_summary = today_closes.aggregate(quantity=Sum("quantity"), weight=Sum("weight_kg"))
-    process_totals = InventoryBucket.objects.filter(kind="PROCESS", quantity__gt=0).values(
-        "name").annotate(total=Sum("quantity")).order_by("-total")[:10]
+    today_summary = today_closes.aggregate(quantity=Sum("quantity"))
     open_orders = ProductionOrder.objects.filter(status=ProductionOrder.Status.OPEN).select_related(
         "part", "part__client").order_by("required_date", "created_at")[:8]
     recent_closes = ProductionClose.objects.filter(closed_at__date=today).select_related(
@@ -1153,10 +1151,8 @@ def _line_dashboard_context():
         "now": now, "machine_rows": machine_rows, "active_count": len(active_items),
         "available_count": total_machines - len(active_items), "total_machines": total_machines,
         "open_count": ProductionOrder.objects.filter(status=ProductionOrder.Status.OPEN).count(),
-        "today_closes_count": today_closes.count(),
         "today_quantity": today_summary["quantity"] or 0,
-        "today_weight": today_summary["weight"] or 0,
-        "process_totals": process_totals, "open_orders": open_orders,
+        "open_orders": open_orders,
         "recent_closes": recent_closes,
         "daily_production": daily_production, "machine_output": machine_output,
         "utilization": utilization, "utilization_degrees": utilization * 3.6,

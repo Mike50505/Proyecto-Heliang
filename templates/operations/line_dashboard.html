@@ -19,15 +19,14 @@
     <button id="open-progress-screen" class="analytics-screen-button" type="button" disabled><span class="analytics-icon" aria-hidden="true">▥</span><span class="analytics-copy"><b>GRÁFICAS DE AVANCE</b><small>Abrir en pantalla completa</small></span><span class="analytics-arrow" aria-hidden="true">→</span></button>
     <div class="line-clock"><b id="clock">{{ now|date:'H:i:s' }}</b><small>{{ now|date:'d/m/Y' }} · Actualiza en <span id="countdown">30</span>s</small></div>
     <button id="theme-toggle" class="line-theme-toggle" type="button"><span aria-hidden="true">☾</span><b>Modo oscuro</b></button>
+    <button id="fullscreen-toggle" class="fullscreen-toggle" type="button" title="Mostrar tablero en pantalla completa" aria-label="Mostrar tablero en pantalla completa"><span aria-hidden="true">⛶</span><b>Pantalla completa</b></button>
   </header>
-  <button id="fullscreen-toggle" class="fullscreen-toggle" type="button" title="Mostrar tablero en pantalla completa" aria-label="Mostrar tablero en pantalla completa"><span aria-hidden="true">⛶</span><b>Pantalla completa</b></button>
   <iframe id="progress-screen-frame" class="progress-screen-frame" src="{% url 'progress-dashboard' %}" title="Gráficas de avance" allowfullscreen></iframe>
   <main>
     <section class="line-kpis">
       <article class="kpi-blue"><span>ÓRDENES ABIERTAS</span><b>{{ open_count }}</b><small>programas pendientes</small></article>
       <article class="kpi-orange"><span>MÁQUINAS ACTIVAS</span><b>{{ active_count }}<i>/{{ total_machines }}</i></b><small>{{ available_count }} disponibles</small></article>
       <article class="kpi-green"><span>PRODUCCIÓN HOY</span><b>{{ today_quantity|floatformat:"-2" }}</b><small>piezas terminadas</small></article>
-      <article class="kpi-purple"><span>PESO PROCESADO</span><b>{{ today_weight|floatformat:2 }}<i> kg</i></b><small>{{ today_closes_count }} cierres registrados</small></article>
     </section>
     <section class="line-analytics">
       <article class="analytics-card">
@@ -73,10 +72,6 @@
         <table><thead><tr><th>Programa</th><th>Parte</th><th>Cliente</th><th>Saldo</th><th>Entrega</th></tr></thead><tbody>
           {% for row in open_orders %}<tr><td><b>{{ row.program }}</b><small>{{ row.folio }}</small></td><td>{{ row.part.number }}</td><td>{{ row.part.client.name|default:'—' }}</td><td><strong>{{ row.remaining_quantity|floatformat:"-2" }}</strong></td><td>{{ row.required_date|date:'d/m'|default:'—' }}</td></tr>{% empty %}<tr><td colspan="5">Sin programas pendientes</td></tr>{% endfor %}
         </tbody></table>
-      </section>
-      <section class="screen-panel process-load">
-        <div class="panel-title"><h2>Material por proceso</h2><span>piezas actuales</span></div>
-        <div class="process-bars">{% for row in process_totals %}<div><label><span>{{ row.name }}</span><b>{{ row.total|floatformat:"-2" }}</b></label><i><em style="width:{% widthratio row.total process_totals.0.total 100 %}%"></em></i></div>{% empty %}<p>Sin material registrado</p>{% endfor %}</div>
       </section>
       <section class="screen-panel latest">
         <div class="panel-title"><h2>Últimos cierres</h2><span>hoy</span></div>

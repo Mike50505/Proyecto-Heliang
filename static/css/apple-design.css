@@ -1,24 +1,24 @@
 /* An Apple website inspired visual system for MESA. */
 :root {
   color-scheme: light;
-  --bg: #f5f5f7;
+  --bg: #f0f5fc;
   --white: #ffffff;
   --text: #1d1d1f;
   --muted: #6e6e73;
   --line: #d2d2d7;
-  --blue: #0071e3;
-  --cyan: #0071e3;
+  --blue: #005bb5;
+  --cyan: #005bb5;
   --navy: #1d1d1f;
   --green: #248a3d;
   --amber: #bf7200;
   --violet: #6e61a8;
   --surface-soft: #fbfbfd;
-  --surface-tint: #f5f5f7;
-  --accent-soft: #eaf4ff;
+  --surface-tint: #edf4ff;
+  --accent-soft: #deedff;
   --hero-bg: #ffffff;
   --header-bg: rgb(250 250 252 / 88%);
   --shadow: 0 12px 36px rgb(0 0 0 / 5%);
-  --focus: #0071e3;
+  --focus: #005bb5;
 }
 html[data-theme="dark"] {
   color-scheme: dark;
@@ -27,19 +27,19 @@ html[data-theme="dark"] {
   --text: #f5f5f7;
   --muted: #a1a1a6;
   --line: #424245;
-  --blue: #2997ff;
-  --cyan: #2997ff;
+  --blue: #1976d2;
+  --cyan: #1976d2;
   --navy: #f5f5f7;
   --green: #54b963;
   --amber: #f5a623;
   --violet: #a69bde;
   --surface-soft: #242426;
   --surface-tint: #161617;
-  --accent-soft: #102b48;
+  --accent-soft: #10365c;
   --hero-bg: #161617;
   --header-bg: rgb(22 22 23 / 88%);
   --shadow: 0 16px 40px rgb(0 0 0 / 22%);
-  --focus: #2997ff;
+  --focus: #1976d2;
 }
 
 html { scroll-behavior: smooth; }
@@ -386,6 +386,37 @@ html[data-theme="dark"] .order-stack { background: var(--line); }
 .login-card label { color: var(--text); font-size: 13px; font-weight: 600; }
 .login-card input { margin-top: 7px; }
 .login-card button { width: 100%; margin-top: 8px; }
+
+/* Blue accents shared by the light and dark themes. */
+.site-header, html[data-theme="dark"] .site-header { border-bottom-color: color-mix(in srgb, var(--blue) 35%, transparent); }
+.site-header .brand-copy b, .eyebrow, .login-intro h1 { color: var(--blue); }
+.site-header nav a:hover, .site-header nav a[aria-current="page"] { color: var(--blue); }
+.hero, .heliang-hero {
+  background: #0052a3;
+  border-color: #0052a3;
+  box-shadow: 0 12px 32px rgb(0 113 227 / 18%);
+}
+html[data-theme="dark"] .hero, html[data-theme="dark"] .heliang-hero {
+  background: #06417d;
+  border-color: #145b9f;
+}
+.hero h1, .heliang-hero h1, .hero-date, .heliang-kpis b { color: #fff; }
+.hero p, .heliang-hero p, .hero .eyebrow, .heliang-hero .eyebrow,
+.hero-date small, .heliang-kpis span { color: #e4f1ff; }
+.heliang-kpis span { background: rgb(255 255 255 / 12%); border: 1px solid rgb(255 255 255 / 20%); }
+.module-card .module-icon, .module-card.teal .module-icon,
+.module-card.amber .module-icon, .module-card.violet .module-icon { background: var(--blue); color: #fff; }
+.module-card, html[data-theme="dark"] .module-card { border-color: color-mix(in srgb, var(--blue) 28%, var(--line)); }
+.module-card:hover { background: var(--accent-soft); border-color: var(--blue); }
+.cards article, .progress-kpis article, .login-card,
+html[data-theme="dark"] .cards article, html[data-theme="dark"] .progress-kpis article,
+html[data-theme="dark"] .login-card { border-top: 3px solid var(--blue); }
+.cards strong, .universe-stats strong, .bucket-grid strong, .progress-kpis b { color: var(--blue); }
+.board-title, .form-heading { background: var(--accent-soft); }
+th, html[data-theme="dark"] th,
+.diameter-priority-table .diameter-group-heading th,
+html[data-theme="dark"] .diameter-priority-table .diameter-group-heading th { background: var(--accent-soft); color: var(--blue); }
+.button.secondary, button.secondary, .close-card .form-actions button.secondary { background: var(--accent-soft); }
 
 @media (max-width: 1100px) {
   .site-header-inner { gap: 14px; }

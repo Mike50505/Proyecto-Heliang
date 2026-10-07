@@ -1,31 +1,31 @@
 :root {
   color-scheme: light;
-  --bg: #f5f5f7;
+  --bg: #f0f5fc;
   --panel: #ffffff;
   --panel2: #ffffff;
   --line: #d2d2d7;
   --text: #1d1d1f;
   --muted: #6e6e73;
-  --cyan: #0071e3;
+  --cyan: #005bb5;
   --green: #248a3d;
   --orange: #bf7200;
   --purple: #6e61a8;
-  --surface: #f5f5f7;
+  --surface: #edf4ff;
   --header-bg: rgb(250 250 252 / 90%);
 }
 html[data-theme="dark"] {
   color-scheme: dark;
-  --bg: #000;
+  --bg: #000000;
   --panel: #1c1c1e;
   --panel2: #1c1c1e;
   --line: #424245;
   --text: #f5f5f7;
   --muted: #a1a1a6;
-  --cyan: #2997ff;
+  --cyan: #1976d2;
   --green: #54b963;
   --orange: #f5a623;
   --purple: #a69bde;
-  --surface: #2c2c2e;
+  --surface: #161617;
   --header-bg: rgb(22 22 23 / 90%);
 }
 body {
@@ -86,6 +86,12 @@ td { border-top-color: var(--line); }
 .order-legend div { background: var(--surface); }
 footer { border-color: var(--line); color: var(--muted); }
 footer b { color: var(--text); }
+.line-header { border-bottom-color: var(--cyan); }
+.line-brand > span { background: var(--cyan); color: #fff; }
+.line-title b, .line-kpis b, .screen-heading h1 { color: var(--cyan); }
+.line-kpis article { border-top: 3px solid var(--cyan); }
+.panel-title { background: var(--surface); }
+th { background: var(--surface); color: var(--cyan); }
 button:focus-visible, a:focus-visible { outline: 3px solid var(--cyan); outline-offset: 3px; }
 @media (max-width: 1160px) {
   .line-theme-toggle b { display: none; }
@@ -100,3 +106,74 @@ button:focus-visible, a:focus-visible { outline: 3px solid var(--cyan); outline-
   .line-kpis { grid-template-columns: repeat(2, minmax(0, 1fr)); }
 }
 @media (prefers-reduced-motion: reduce) { .particle-background { display: none; } }
+
+/* Production screen: each section owns its space, including in fullscreen. */
+.line-header { flex-wrap: wrap; height: auto; }
+.line-header > * { min-width: 0; }
+.line-title { flex: 1 1 180px; }
+.line-clock { margin-left: auto; }
+.line-header .fullscreen-toggle, html:fullscreen .line-header .fullscreen-toggle {
+  position: static;
+  flex: 0 0 auto;
+  padding: 8px 12px;
+  opacity: 1;
+  white-space: nowrap;
+}
+.line-kpis { grid-template-columns: repeat(3, minmax(0, 1fr)); }
+.line-lower, html:fullscreen .line-lower { grid-template-columns: minmax(0, 1.7fr) minmax(0, 1fr); }
+.line-lower .latest { display: block; }
+.machine-head b, .machine-job b { overflow-wrap: anywhere; }
+.line-machines > article { min-width: 0; }
+.queue table { table-layout: fixed; }
+.queue th, .queue td { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.queue th:nth-child(3) { width: 26%; }
+.queue th:last-child { width: 12%; }
+
+html:fullscreen body { grid-template-rows: auto minmax(0, 1fr) 30px; }
+html:fullscreen .line-header { height: auto; min-height: 68px; padding: 10px 1.4vw; }
+html:fullscreen main {
+  grid-template-rows: auto minmax(210px, .9fr) minmax(290px, 1.4fr) minmax(190px, .8fr);
+  gap: 12px;
+  overflow: auto;
+}
+html:fullscreen main > * { min-width: 0; min-height: 0; margin: 0; }
+html:fullscreen .line-analytics { grid-template-columns: minmax(0, 1.35fr) minmax(0, .8fr) minmax(0, 1fr); overflow: hidden; }
+html:fullscreen .analytics-card { min-height: 0; overflow: auto; padding: 12px 16px; }
+html:fullscreen .production-machine-card { grid-column: auto; }
+html:fullscreen .line-kpis b { font-size: clamp(26px, 3vh, 40px); }
+html:fullscreen .line-kpis span, html:fullscreen .line-kpis small { font-size: 12px; }
+html:fullscreen .line-machines {
+  height: auto;
+  grid-template-rows: none;
+  grid-auto-rows: minmax(145px, 1fr);
+  overflow: auto;
+  gap: 10px;
+}
+html:fullscreen .line-machines > article { height: auto; padding: 12px 14px; }
+html:fullscreen .machine-head b { font-size: clamp(15px, 1.5vw, 21px); }
+html:fullscreen .machine-job b { font-size: clamp(15px, 1.4vw, 20px); }
+html:fullscreen .machine-job span { font-size: 13px; }
+html:fullscreen .machine-head small, html:fullscreen .machine-job small { font-size: 11px; }
+html:fullscreen .machine-qty { display: flex; font-size: 11px; }
+html:fullscreen .machine-qty b { font-size: 16px; }
+html:fullscreen .progress-meta { display: flex; font-size: 11px; }
+html:fullscreen .screen-panel { height: auto; overflow: auto; }
+html:fullscreen .panel-title h2, html:fullscreen .screen-heading h1 { font-size: 18px; }
+html:fullscreen th { font-size: 11px; }
+html:fullscreen td, html:fullscreen .close-list b, html:fullscreen .close-list time { font-size: 13px; }
+html:fullscreen .close-list small { font-size: 11px; }
+html:fullscreen .close-list strong { font-size: 16px; }
+html:fullscreen footer { height: 30px; font-size: 10px; }
+
+@media (max-height: 900px) {
+  /* Shorter displays prioritize live machines; charts remain available above. */
+  html:fullscreen .line-analytics { display: none; }
+  html:fullscreen main { grid-template-rows: auto minmax(300px, 1fr) minmax(190px, .65fr); }
+  html:fullscreen .line-kpis small { display: block; }
+}
+@media (max-width: 900px) {
+  .line-lower, html:fullscreen .line-lower { grid-template-columns: minmax(0, 1fr); }
+  html:fullscreen .line-machines { grid-template-columns: repeat(3, minmax(0, 1fr)); }
+  html:fullscreen main { display: flex; flex-direction: column; overflow: auto; }
+  html:fullscreen .screen-section, html:fullscreen .line-lower { flex: 0 0 auto; }
+}
