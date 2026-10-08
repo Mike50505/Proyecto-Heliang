@@ -1,10 +1,11 @@
 {% extends 'base.html' %}
+{% load static %}
 {% block title %}Ingresar · MESA{% endblock %}
 {% block content %}
 <div class="login-shell">
   <div class="login-intro">
     <span class="eyebrow">MESA PRODUCCIÓN</span>
-    <h1>Todo tu proceso.<br>En un solo lugar.</h1>
+    <h1 aria-label="Todo tu proceso. En un solo lugar."><span class="login-title-line" data-text-type="Todo tu proceso.&#10;En un solo lugar." aria-hidden="true"><span class="login-title-characters">Todo tu proceso.<br>En un solo lugar.</span></span></h1>
     <p>Accede a programas, máquinas e inventario con tu cuenta de trabajo.</p>
   </div>
   <section class="login-card" aria-labelledby="login-title">
@@ -13,4 +14,5 @@
     <form method="post">{% csrf_token %}{{ form.as_p }}<button type="submit">Ingresar</button></form>
   </section>
 </div>
+<script src="{% static 'js/text-type.js' %}" defer></script>
 {% endblock %}

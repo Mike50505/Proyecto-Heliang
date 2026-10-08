@@ -138,7 +138,7 @@ const progressScreen = document.getElementById('progress-screen');
 const screenMode = document.getElementById('screen-mode');
 function updateScreenMode() {
   const active = document.fullscreenElement === progressScreen;
-  screenMode.innerHTML = active ? '<span>×</span> Salir de pantalla' : '<span>⛶</span> Modo pantalla';
+  screenMode.innerHTML = active ? '<span aria-hidden="true">×</span> Salir de pantalla' : '<span aria-hidden="true">⛶</span> Modo pantalla';
 }
 screenMode.addEventListener('click', async () => {
   try {

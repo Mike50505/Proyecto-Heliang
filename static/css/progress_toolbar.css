@@ -1,0 +1,61 @@
+/* Give the title and controls their own rows instead of squeezing the toolbar. */
+#progress-screen .progress-head {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr);
+  gap: 18px;
+}
+#progress-screen .filter-actions {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 12px;
+  width: 100%;
+  min-width: 0;
+}
+#progress-screen .active-filters {
+  flex: 1 1 180px;
+  min-height: 44px;
+  min-width: 0;
+  flex-wrap: wrap;
+  line-height: 1.4;
+}
+#progress-screen .chart-style-control {
+  display: flex;
+  flex-direction: row;
+  align-items: center;
+  gap: 10px;
+  width: auto;
+  font-size: 13px;
+  line-height: 1.4;
+  flex: 0 0 auto;
+}
+#progress-screen .chart-style-control > .glide-select { width: 220px; }
+#progress-screen .filter-actions > .button {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 7px;
+  height: 44px;
+  min-height: 44px;
+  padding: 0 16px;
+  flex: 0 0 auto;
+  white-space: nowrap;
+  line-height: 1.2;
+}
+#progress-screen .screen-mode span { margin: 0; line-height: 1; }
+#progress-screen:fullscreen .filter-actions > .screen-mode { position: static; opacity: 1; }
+#progress-screen:fullscreen .progress-head h1 { color: inherit; }
+#progress-screen:fullscreen :is(.glide-select, .glide-select__menu) {
+  --gs-surface: #10283b;
+  --gs-text: #f4f8fb;
+  --gs-accent: #48d7e9;
+  --gs-highlight: #174c68;
+}
+#progress-screen:fullscreen .glide-select__trigger { border-color: #31536b; }
+@media (max-width: 700px) {
+  #progress-screen .filter-actions { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); }
+  #progress-screen .active-filters { grid-column: 1 / -1; min-height: 0; }
+  #progress-screen .chart-style-control { display: grid; grid-template-columns: auto minmax(0, 1fr); grid-column: 1 / -1; width: 100%; min-width: 0; }
+  #progress-screen .chart-style-control > .glide-select { width: 100%; }
+  #progress-screen .filter-actions > .button { width: 100%; min-width: 0; padding-inline: 10px; font-size: 13px; }
+}

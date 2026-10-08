@@ -1,0 +1,30 @@
+{% load static %}
+<header class="site-header">
+  <div class="site-header-inner">
+    <a class="brand" href="{% url 'dashboard' %}" aria-label="MESA · Inicio">
+      <span class="brand-mark"><img src="{% static 'logo-mesa.svg' %}" alt=""></span>
+      <span class="brand-copy"><b>MESA</b><small>Producción</small></span>
+    </a>
+    {% if user.is_authenticated %}
+    <button class="nav-toggle" type="button" aria-expanded="false" aria-controls="site-nav" aria-label="Abrir menú"><span></span><span></span></button>
+    <nav id="site-nav" aria-label="Módulos">
+      {% if module_access.program_loading %}<a href="{% url 'load-program' %}">Programas</a>{% endif %}
+      {% if module_access.heliang %}<a href="{% url 'heliang' %}">Producción</a>{% endif %}
+      {% if module_access.universe %}<a class="nav-priority" href="{% url 'universe' %}">Universo</a>{% endif %}
+      {% if module_access.inventory %}<a href="{% url 'inventory-list' %}">Inventario</a>{% endif %}
+      {% if module_access.surplus %}<a href="{% url 'surplus' %}">Sobrante</a>{% endif %}
+      {% if module_access.process_material %}<a href="{% url 'process-material' %}">Material en proceso</a>{% endif %}
+      {% if module_access.reports %}<a href="{% url 'report' %}">Reportes</a>{% endif %}
+      {% if module_access.line_dashboard %}
+      <a href="{% url 'progress-dashboard' %}">Gráficas de avance</a>
+      <a href="{% url 'line-dashboard' %}">Tablero de línea</a>
+      {% endif %}
+      {% if user.is_staff %}<a href="/admin/">Administración</a>{% endif %}
+    </nav>
+    {% endif %}
+    <div class="header-actions">
+      <button id="theme-toggle" class="theme-toggle" type="button"><span aria-hidden="true">☾</span><b>Modo oscuro</b></button>
+      {% if user.is_authenticated %}<form method="post" action="{% url 'logout' %}">{% csrf_token %}<button class="header-exit" type="submit">Salir</button></form>{% endif %}
+    </div>
+  </div>
+</header>

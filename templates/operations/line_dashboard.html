@@ -6,19 +6,21 @@
   <meta name="viewport" content="width=device-width,initial-scale=1">
   <script>document.documentElement.dataset.theme=localStorage.getItem('mesa-theme')||(matchMedia('(prefers-color-scheme: dark)').matches?'dark':'light');</script>
   <title>Tablero de línea · MESA</title>
+  <link rel="icon" href="{% static 'logo-mesa.svg' %}" type="image/svg+xml">
   <link rel="stylesheet" href="{% static 'css/line_dashboard.css' %}">
   <link rel="stylesheet" href="{% static 'css/line_analytics.css' %}">
   <link rel="stylesheet" href="{% static 'css/fullscreen.css' %}">
   <link rel="stylesheet" href="{% static 'css/apple-line.css' %}">
+  <link rel="stylesheet" href="{% static 'css/line-navigation.css' %}">
+  <link rel="stylesheet" href="{% static 'css/suite-controls.css' %}">
 </head>
 <body>
   <canvas class="particle-background" data-particle-background aria-hidden="true"></canvas>
+  {% include 'includes/site_header.html' %}
   <header class="line-header">
-    <a href="{% url 'dashboard' %}" class="line-brand"><span>M</span><div><b>MESA</b><small>CONTROL DE PRODUCCIÓN</small></div></a>
     <div class="line-title"><b>ESTADO DE LA LÍNEA</b><small>Heliang · Máquinas automáticas</small></div>
     <button id="open-progress-screen" class="analytics-screen-button" type="button" disabled><span class="analytics-icon" aria-hidden="true">▥</span><span class="analytics-copy"><b>GRÁFICAS DE AVANCE</b><small>Abrir en pantalla completa</small></span><span class="analytics-arrow" aria-hidden="true">→</span></button>
     <div class="line-clock"><b id="clock">{{ now|date:'H:i:s' }}</b><small>{{ now|date:'d/m/Y' }} · Actualiza en <span id="countdown">30</span>s</small></div>
-    <button id="theme-toggle" class="line-theme-toggle" type="button"><span aria-hidden="true">☾</span><b>Modo oscuro</b></button>
     <button id="fullscreen-toggle" class="fullscreen-toggle" type="button" title="Mostrar tablero en pantalla completa" aria-label="Mostrar tablero en pantalla completa"><span aria-hidden="true">⛶</span><b>Pantalla completa</b></button>
   </header>
   <iframe id="progress-screen-frame" class="progress-screen-frame" src="{% url 'progress-dashboard' %}" title="Gráficas de avance" allowfullscreen></iframe>
@@ -159,5 +161,7 @@
   </script>
   <script src="{% static 'js/theme.js' %}"></script>
   <script src="{% static 'js/particles.js' %}" defer></script>
+  <script src="{% static 'js/navigation.js' %}" defer></script>
+  <script src="{% static 'js/jelly-controls.js' %}" defer></script>
 </body>
 </html>

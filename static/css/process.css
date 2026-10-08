@@ -15,7 +15,7 @@
 @media(max-width:1100px) { .bucket-grid { grid-template-columns:repeat(4,1fr); } .process-layout { grid-template-columns:1fr; } }
 @media(max-width:620px) { .part-lookup { align-items:stretch; flex-direction:column; } .part-lookup > div { flex-direction:column; } .balance-strip,.bucket-grid { grid-template-columns:repeat(2,1fr); } }
 
-.nav-priority { color:#fff !important; font-weight:750 !important; }
+.nav-priority { font-weight:750 !important; }
 .nav-priority::before { content:""; display:inline-block; width:6px; height:6px; margin-right:6px; border-radius:50%; background:#25c5d9; vertical-align:middle; }
 .priority-card { border:2px solid #79d5df; box-shadow:0 8px 24px #17a4b820; }
 .priority-panel { margin:18px 0 16px; padding:0; overflow:hidden; border-top:4px solid #d68518; }
