@@ -28,7 +28,7 @@
       <nav id="site-nav" aria-label="Módulos">
         {% if module_access.program_loading %}<a href="{% url 'load-program' %}">Programas</a>{% endif %}
         {% if module_access.heliang %}<a href="{% url 'heliang' %}">Producción</a>{% endif %}
-        {% if module_access.universe %}<a href="{% url 'universe' %}">Universo</a>{% endif %}
+        {% if module_access.universe %}<a class="nav-priority" href="{% url 'universe' %}">Universo</a>{% endif %}
         {% if module_access.inventory %}<a href="{% url 'inventory-list' %}">Inventario</a>{% endif %}
         {% if module_access.surplus %}<a href="{% url 'surplus' %}">Sobrante</a>{% endif %}
         {% if module_access.process_material %}<a href="{% url 'process-material' %}">Material en proceso</a>{% endif %}
