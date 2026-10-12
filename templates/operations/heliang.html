@@ -1,5 +1,5 @@
 {% extends 'base.html' %}
-{% block title %}Heliang · Máquinas automáticas{% endblock %}
+{% block title %}Máquinas automáticas · MESA{% endblock %}
 {% block content %}
 <div class="heliang-hero"><div><span class="eyebrow">LÍNEA DE PRODUCCIÓN PRIORITARIA</span><h1>Máquinas automáticas</h1><p>Asigna programas, controla las máquinas activas y registra cierres parciales o totales.</p></div><div class="heliang-kpis"><span><b>{{ open_orders|length }}</b> órdenes disponibles</span><span><b>{{ active_items|length }}</b> en proceso</span></div></div>
 <nav class="context-nav" aria-label="Secciones de producción"><a href="#assign-order">01 · Asignar orden</a><a href="#close-work">02 · Registrar producción</a><a href="#diameter-priorities">Prioridades</a><a href="#available-orders">Órdenes disponibles</a><a href="#active-production">En proceso</a></nav>

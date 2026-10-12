@@ -75,7 +75,7 @@
       this.resizeObserver = new ResizeObserver(() => this.resize());
       this.resizeObserver.observe(canvas);
       this.themeObserver = new MutationObserver(() => { this.updatePalette(); this.draw(); });
-      this.themeObserver.observe(document.documentElement, {attributes:true, attributeFilter:['data-theme']});
+      this.themeObserver.observe(document.documentElement, {attributes:true, attributeFilter:['data-theme','data-palette']});
       this.removalObserver = new MutationObserver(() => {
         if (!canvas.isConnected) this.destroy();
       });
@@ -116,8 +116,10 @@
 
     updatePalette() {
       // A precomputed gradient gives neighboring strokes coherent colors.
-      const colors = document.documentElement.dataset.theme === 'dark'
-        ? this.options.darkColors : this.options.colors;
+      const style = getComputedStyle(document.documentElement);
+      const custom = [1,2,3].map(i => style.getPropertyValue(`--mesa-particle-${i}`).trim()).filter(Boolean);
+      const colors = custom.length === 3 ? custom : (document.documentElement.dataset.theme === 'dark'
+        ? this.options.darkColors : this.options.colors);
       const strip = document.createElement('canvas');
       strip.width = 256; strip.height = 1;
       const ctx = strip.getContext('2d', {willReadFrequently:true});
