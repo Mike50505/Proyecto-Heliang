@@ -7,7 +7,7 @@
 <a class="module-card" href="{% url 'load-program' %}"><span class="module-icon">{% include 'includes/module_icon.html' with icon='program' %}</span><span><b>Cargar programa</b><small>Carga individual o masiva desde Excel</small></span><i aria-hidden="true">→</i></a>
 {% endif %}
 {% if module_access.heliang %}
-<a class="module-card" href="{% url 'heliang' %}"><span class="module-icon">{% include 'includes/module_icon.html' with icon='production' %}</span><span><b>Heliang · Máquinas automáticas</b><small>Asigna órdenes, monitorea máquinas y registra cierres</small></span><i aria-hidden="true">→</i></a>
+<a class="module-card" href="{% url 'heliang' %}"><span class="module-icon">{% include 'includes/module_icon.html' with icon='production' %}</span><span><b>Máquinas automáticas</b><small>Asigna órdenes, monitorea máquinas y registra cierres</small></span><i aria-hidden="true">→</i></a>
 {% endif %}
 {% if module_access.universe %}
 <a class="module-card" href="{% url 'universe' %}"><span class="module-icon">{% include 'includes/module_icon.html' with icon='universe' %}</span><span><b>Universo Ramos Arizpe</b><small>Consulta el catálogo maestro de piezas y diámetros</small></span><i aria-hidden="true">→</i></a>

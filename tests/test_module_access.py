@@ -54,7 +54,7 @@ class ModuleAccessTests(TestCase):
         response = self.client.get(reverse("heliang"))
         self.assertEqual(response.status_code, 200)
         dashboard = self.client.get(reverse("dashboard"))
-        self.assertContains(dashboard, "Heliang · Máquinas automáticas")
+        self.assertContains(dashboard, "Máquinas automáticas")
         self.assertNotContains(dashboard, "Carga individual o masiva desde Excel")
 
     def test_superuser_has_all_modules_without_flags(self):
