@@ -22,7 +22,7 @@
       </tr>{% endfor %}</tbody>
     </table>
   </div>
-  <script src="{% static 'js/preview-priorities.js' %}"></script>
+  <script src="{% static 'js/preview-priorities.js' %}?v=20261012-3"></script>
   {% if preview_token %}
   <form method="post">{% csrf_token %}
     <input type="hidden" name="action" value="confirm">

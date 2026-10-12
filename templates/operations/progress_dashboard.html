@@ -2,11 +2,11 @@
 {% load static %}
 {% block title %}Avance de producción · MESA{% endblock %}
 {% block page_styles %}
-<link rel="stylesheet" href="{% static 'css/progress_dashboard.css' %}">
-<link rel="stylesheet" href="{% static 'css/progress_screen.css' %}">
-<link rel="stylesheet" href="{% static 'css/progress_chart_styles.css' %}">
-<link rel="stylesheet" href="{% static 'css/apple-design.css' %}">
-<link rel="stylesheet" href="{% static 'css/progress_toolbar.css' %}">
+<link rel="stylesheet" href="{% static 'css/progress_dashboard.css' %}?v=20261012-3">
+<link rel="stylesheet" href="{% static 'css/progress_screen.css' %}?v=20261012-3">
+<link rel="stylesheet" href="{% static 'css/progress_chart_styles.css' %}?v=20261012-3">
+<link rel="stylesheet" href="{% static 'css/apple-design.css' %}?v=20261012-3">
+<link rel="stylesheet" href="{% static 'css/progress_toolbar.css' %}?v=20261012-3">
 {% endblock %}
 {% block content %}
 <div id="progress-screen" class="progress-screen">
@@ -55,5 +55,5 @@
 </div>
 {{ progress_data|json_script:"progress-data" }}
 <script>window.progressDataUrl = "{% url 'progress-dashboard-data' %}";</script>
-<script src="{% static 'js/progress_dashboard.js' %}"></script>
+<script src="{% static 'js/progress_dashboard.js' %}?v=20261012-3"></script>
 {% endblock %}
