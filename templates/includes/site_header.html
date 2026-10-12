@@ -23,7 +23,7 @@
     </nav>
     {% endif %}
     <div class="header-actions">
-      <button id="theme-toggle" class="theme-toggle" type="button"><span aria-hidden="true">☾</span><b>Modo oscuro</b></button>
+      {% include 'includes/color_picker.html' %}
       {% if user.is_authenticated %}<form method="post" action="{% url 'logout' %}">{% csrf_token %}<button class="header-exit" type="submit">Salir</button></form>{% endif %}
     </div>
   </div>

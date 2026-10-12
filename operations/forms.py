@@ -80,7 +80,7 @@ class ProgramOrderForm(forms.Form):
                                     widget=forms.DateInput(attrs={"type": "date"}))
     line = forms.CharField(label="Línea del cliente", max_length=80, required=False)
     priority = forms.IntegerField(label="Prioridad", min_value=1, required=False,
-                                  help_text="1 es la prioridad mÃ¡s alta.")
+                                  help_text="1 es la prioridad más alta.")
     comment = forms.CharField(label="Comentarios", required=False,
                               widget=forms.Textarea(attrs={"rows": 2}))
 
@@ -223,6 +223,9 @@ class StartProductionForm(forms.Form):
     quantity = forms.IntegerField(label="Cantidad", min_value=1)
     def __init__(self, *args, **kwargs):
         super().__init__(*args, **kwargs)
+        self.fields["order"].empty_label = "Selecciona una orden abierta"
+        self.fields["machine"].empty_label = "Selecciona una máquina disponible"
+        self.fields["machine"].help_text = "Solo se muestran equipos disponibles."
         self.fields["order"].queryset = ProductionOrder.objects.filter(status=ProductionOrder.Status.OPEN).select_related("part").annotate(
             priority_sort=Case(When(priority__isnull=True, then=Value(2147483647)), default="priority", output_field=IntegerField())
         ).order_by("priority_sort", "required_date", "created_at")
@@ -236,6 +239,7 @@ class CloseProductionForm(forms.Form):
     comment = forms.CharField(label="Comentario", widget=forms.Textarea(attrs={"rows": 3}), required=False)
     def __init__(self, *args, **kwargs):
         super().__init__(*args, **kwargs)
+        self.fields["work_item"].empty_label = "Selecciona un proceso activo"
         self.fields["work_item"].queryset = WorkInProcess.objects.filter(status=WorkInProcess.Status.ACTIVE).select_related("order", "machine")
 
 

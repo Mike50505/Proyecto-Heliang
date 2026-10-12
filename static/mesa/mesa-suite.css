@@ -1,0 +1,184 @@
+/* MESA corporate UI. Source: Heiliang. Distributed by sync_design.py. */
+@media screen {
+:root {
+  --mesa-bg: #f0f5fc;
+  --mesa-surface: #fff;
+  --mesa-surface-soft: #fbfbfd;
+  --mesa-text: #1d1d1f;
+  --mesa-muted: #6e6e73;
+  --mesa-line: #d2d2d7;
+  --mesa-blue: #005bb5;
+  --mesa-action: #005bb5;
+  --mesa-accent-soft: #deedff;
+  --mesa-chip: #e9eef5;
+  --mesa-chip-hover: #dceafd;
+  --mesa-header: rgb(250 250 252 / 92%);
+  --mesa-hero: #0052a3;
+  --mesa-shadow: 0 12px 36px rgb(0 0 0 / 5%);
+  --mesa-radius: 22px;
+  --mesa-font: -apple-system, BlinkMacSystemFont, "SF Pro Text", "Segoe UI", Arial, sans-serif;
+}
+html[data-theme="dark"] {
+  --mesa-bg: #000;
+  --mesa-surface: #1c1c1e;
+  --mesa-surface-soft: #242426;
+  --mesa-text: #f5f5f7;
+  --mesa-muted: #a1a1a6;
+  --mesa-line: #424245;
+  --mesa-blue: #64aaff;
+  --mesa-action: #006bd6;
+  --mesa-accent-soft: #10365c;
+  --mesa-chip: #242426;
+  --mesa-chip-hover: #12365b;
+  --mesa-header: rgb(22 22 23 / 94%);
+  --mesa-hero: #06417d;
+  --mesa-shadow: 0 16px 40px rgb(0 0 0 / 22%);
+}
+/* Map legacy component tokens to the same company palette. */
+html:root:has(body.mesa-suite) {
+  color-scheme: light;
+  --bg: var(--mesa-bg); --background: var(--mesa-bg); --surface: var(--mesa-surface);
+  --white: var(--mesa-surface); --card-bg: var(--mesa-surface); --surface-raised: var(--mesa-surface-soft);
+  --text: var(--mesa-text); --ink: var(--mesa-text); --text-main: var(--mesa-text);
+  --muted: var(--mesa-muted); --text-secondary: var(--mesa-muted); --text-muted: var(--mesa-muted);
+  --text-tertiary: var(--mesa-muted); --text-subtle: var(--mesa-muted);
+  --line: var(--mesa-line); --border: var(--mesa-line); --line-color: var(--mesa-line); --card-border: var(--mesa-line);
+  --blue: var(--mesa-action); --accent: var(--mesa-blue); --primary: var(--mesa-action);
+  --primary-hover: var(--mesa-action); --blue-soft: var(--mesa-accent-soft); --primary-soft: var(--mesa-accent-soft);
+  --sidebar-bg: var(--mesa-header); --sidebar-text: var(--mesa-text); --sidebar-muted: var(--mesa-muted);
+  --sidebar-border: var(--mesa-line); --navy: var(--mesa-text); --navy-2: var(--mesa-text);
+  --shadow-md: var(--mesa-shadow); --shadow-lg: var(--mesa-shadow);
+}
+html:root[data-theme="dark"]:has(body.mesa-suite) { color-scheme: dark; }
+html[data-theme] body.mesa-suite { margin: 0; min-height:100dvh; background: var(--mesa-bg); color: var(--mesa-text); font-family: var(--mesa-font); -webkit-font-smoothing: antialiased; letter-spacing: -.012em; }
+html body.mesa-suite *, html body.mesa-suite *::before, html body.mesa-suite *::after { box-sizing: border-box; }
+html body.mesa-suite :is(h1,h2,h3,h4,button,input,select,textarea) { font-family: var(--mesa-font); }
+html body.mesa-suite :is(h1,h2,h3) { letter-spacing: -.035em; }
+html body.mesa-suite h1 { font-size: clamp(28px, 3vw, 40px); line-height: 1.12; }
+html body.mesa-suite h2 { font-size: 22px; line-height: 1.25; }
+html body.mesa-suite .eyebrow { color: var(--mesa-blue); font-size: 11px; font-weight: 700; letter-spacing: .08em; }
+html body.mesa-suite :is(.muted,.subtitle,.hint) { color: var(--mesa-muted); }
+html body.mesa-suite :is(.app-shell,.inventory-app) { display: block; min-height: 100vh; background: var(--mesa-bg); color: var(--mesa-text); }
+html body.mesa-suite :is(.main,.main-content,.inventory-main) { margin-left: 0; min-width: 0; }
+html body.mesa-suite :is(.content,.main-content,.inventory-main,main.wrap,.page) { max-width: 1440px; margin-inline: auto; padding: 36px clamp(18px, 4vw, 58px) 64px; }
+html body.mesa-suite .main-content .page { padding: 0; }
+html body.mesa-suite :is(.page,.inventory-page) { max-width: 1440px; }
+html body.mesa-suite :is(.page-heading,.page-header,.inventory-page-header,.mesa-page-heading) {
+  display: flex; align-items: center; justify-content: space-between; flex-wrap: wrap; gap: 22px;
+  margin-bottom: 28px; padding: 28px 32px; border: 0; border-radius: var(--mesa-radius);
+  background: var(--mesa-hero); color: #fff; box-shadow: 0 12px 32px rgb(0 113 227 / 15%);
+}
+html body.mesa-suite :is(.page-heading,.page-header,.inventory-page-header,.mesa-page-heading) :is(h1,h2) { margin: 0; color: #fff; }
+html body.mesa-suite :is(.page-heading,.page-header,.inventory-page-header,.mesa-page-heading) :is(p,.muted,.subtitle,.eyebrow,span:not(.glide-select__label)) { color: #e4f1ff; }
+html body.mesa-suite :is(.page-heading,.page-header,.inventory-page-header,.mesa-page-heading) :is(.actions,.toolbar,.inventory-actions) { flex-wrap: wrap; }
+html body.mesa-suite :is(.page-heading,.page-header,.inventory-page-header,.mesa-page-heading) .subtitle { font-size:14px; font-weight:400; letter-spacing:0; line-height:1.6; }
+html body.mesa-suite :is(.panel,.card,.table-card,.stat-card,.metric,.inventory-card,.inventory-stats article,.service-card,.auth-panel,.login-card,.modal,.detail-modal,.operation-card) {
+  background: var(--mesa-surface); color: var(--mesa-text); border-color: var(--mesa-line);
+  border-radius: var(--mesa-radius); box-shadow: var(--mesa-shadow);
+}
+html body.mesa-suite :is(.panel-header,.card-header,.modal-header,.modal-head,.inventory-card-header,.section-head,.table-caption) { background: transparent; color: var(--mesa-text); border-color: var(--mesa-line); }
+html body.mesa-suite :is(.stat-card,.metric,.inventory-stats article) { border-top: 3px solid var(--mesa-action); }
+html body.mesa-suite :is(.stat-value,.metric-value,.inventory-stats b) { color: var(--mesa-blue); }
+html body.mesa-suite :is(.stat-icon,.metric-icon,.service-icon,.quick-icon,.inventory-stats article>span) { color: var(--mesa-blue); background: var(--mesa-accent-soft); border-radius: 12px; }
+html body.mesa-suite :is(.service-card,.quick-action):hover { background: var(--mesa-accent-soft); border-color: var(--mesa-blue); box-shadow: 0 10px 24px rgb(0 113 227 / 18%); }
+html body.mesa-suite :is(.button,.btn,.primary-button,.secondary-button,.pill,.filter-chip,.order-action,.admin-link) {
+  min-height: 40px; padding: 9px 16px; border-radius: 999px; font-size: 13px; font-weight: 650;
+  transition: background-color 160ms ease, box-shadow 160ms ease, transform 190ms cubic-bezier(.25,1.2,.4,1);
+}
+html body.mesa-suite :is(.button.primary,.button-primary,.btn-primary,.primary-button,.inventory-primary) { background: var(--mesa-action); border-color: transparent; color: #fff; box-shadow: 0 4px 10px rgb(0 113 227 / 18%); }
+html body.mesa-suite :is(.button.secondary,.button-secondary,.btn-secondary,.secondary-button,.admin-link) { background: var(--mesa-accent-soft); border-color: transparent; color: var(--mesa-text); box-shadow: none; }
+html body.mesa-suite :is(.button,.btn,.primary-button,.secondary-button):not(:disabled):hover { transform: translateY(-.5px) scale(1.015); }
+html body.mesa-suite :is(.button,.btn,.primary-button,.secondary-button):not(:disabled):active { transform: scale(.98); }
+html body.mesa-suite button:disabled { opacity: .55; cursor: not-allowed; transform: none; }
+html body.mesa-suite :is(a,button,input,select,textarea,[tabindex]):focus-visible { outline: 3px solid var(--mesa-blue); outline-offset: 3px; }
+html body.mesa-suite :is(input:not([type=checkbox]):not([type=radio]):not([type=hidden]),select,textarea) { background: var(--mesa-surface); color: var(--mesa-text); border:1px solid var(--mesa-line); border-radius: 12px; font-size: 14px; padding:10px 12px; }
+html body.mesa-suite :is(input:not([type=checkbox]):not([type=radio]):not([type=hidden]),select) { min-height: 44px; }
+html body.mesa-suite input[type=checkbox], html body.mesa-suite input[type=radio] { accent-color: var(--mesa-action); }
+html body.mesa-suite :is(label,.field label) { color: var(--mesa-text); }
+html body.mesa-suite :is(input,textarea)::placeholder { color: var(--mesa-muted); }
+html body.mesa-suite :is(.search,.search-field,.inventory-filters,.inventory-columns,.detail-box,.order-attention) { background: var(--mesa-surface-soft); color: var(--mesa-text); border-color: var(--mesa-line); }
+html body.mesa-suite :is(.table-scroll,.table-wrap,.inventory-table) { overflow-x: auto; max-width: 100%; }
+html body.mesa-suite .table-card { overflow:hidden; min-width:0; }
+html body.mesa-suite .table-caption { display:flex; flex-wrap:wrap; justify-content:space-between; align-items:center; gap:12px; padding:20px 24px; border-bottom:1px solid var(--mesa-line); }
+html body.mesa-suite .table-caption span { color:var(--mesa-muted); }
+html body.mesa-suite .filter-panel { display:flex; flex-wrap:wrap; align-items:center; gap:10px; margin-bottom:20px; }
+html body.mesa-suite .search-field { flex:1 1 220px; min-width:0; }
+html body.mesa-suite .search-field input { max-width:100%; }
+html body.mesa-suite :is(th,td) { border-color: var(--mesa-line); font-variant-numeric: tabular-nums; }
+html body.mesa-suite th { background: transparent; color: var(--mesa-muted); font-size: 11px; letter-spacing: .04em; }
+html body.mesa-suite :is(td,.row-link,.part-number) { color: var(--mesa-text); }
+html body.mesa-suite tr:hover td { background: var(--mesa-surface-soft); }
+html body.mesa-suite :is(.tag,.inventory-tag,.badge,.status) { border-radius: 999px; }
+/* Shared top navigation: logo, module identity, capsules, account controls. */
+html body.mesa-suite .mesa-header {
+  position: sticky; inset: 0 0 auto; z-index: 100; width: 100%; height: auto; min-height: 64px;
+  display: flex; flex-direction: row; align-items: center; flex-wrap: wrap; gap: 18px;
+  padding: 12px 24px; margin: 0; background: var(--mesa-header); color: var(--mesa-text);
+  border: 0; border-bottom: 1px solid color-mix(in srgb, var(--mesa-blue) 30%, transparent);
+  backdrop-filter: saturate(180%) blur(20px); box-shadow: none; transform: none;
+}
+html body.mesa-suite .mesa-brand { display: inline-flex; align-items: center; gap: 9px; flex: none; padding: 0; margin: 0; border: 0; color: var(--mesa-text); text-decoration: none; }
+html body.mesa-suite .mesa-brand img { display: block; width: 54px; height: 38px; object-fit: contain; filter: brightness(0); }
+html[data-theme="dark"] body.mesa-suite .mesa-brand img { filter: brightness(0) invert(1); }
+html body.mesa-suite .mesa-brand :is(b,strong) { display: block; font-size: 14px; font-weight: 700; color: var(--mesa-blue); letter-spacing: .04em; }
+html body.mesa-suite .mesa-brand small { display: block; font-size: 10px; font-weight: 500; color: var(--mesa-muted); margin-top: 1px; letter-spacing: 0; }
+html body.mesa-suite .mesa-header .mesa-nav { display: flex; flex: 1; flex-direction: row; align-items: center; justify-content: safe center; gap: 7px; margin: 0; padding: 4px 3px; min-width: 0; overflow-x: auto; scrollbar-width: thin; }
+html body.mesa-suite .mesa-nav :is(a,button) { display: inline-flex; flex: none; width:auto; align-items: center; justify-content: center; gap: 7px; min-height: 36px; margin: 0; padding: 8px 13px; border: 0; border-radius: 999px; background: var(--mesa-chip); color: var(--mesa-text); font-size: 12px; font-weight: 550; white-space: nowrap; text-decoration: none; transition: background-color 160ms ease, box-shadow 190ms ease; }
+html body.mesa-suite .mesa-nav :is(a,button):hover { background: var(--mesa-chip-hover); color: var(--mesa-text); }
+html body.mesa-suite .mesa-nav :is(.active,[aria-current=page],[aria-selected=true]) { background: var(--mesa-action); color: #fff; box-shadow: 0 3px 9px rgb(0 113 227 / 18%); }
+html body.mesa-suite .mesa-nav [hidden] { display: none; }
+html body.mesa-suite .mesa-nav :is(.nav-label,.nav-icon) { display: none; }
+html body.mesa-suite .mesa-nav svg { width: 16px; height: 16px; }
+html body.mesa-suite .mesa-account { display: flex; align-items: center; flex: none; gap: 10px; margin: 0 0 0 auto; padding: 0; border: 0; color: var(--mesa-text); font-size: 12px; }
+html body.mesa-suite .mesa-account :is(form,button,a) { margin: 0; }
+html body.mesa-suite .mesa-account :is(button,a), html body.mesa-suite .mesa-menu { display: inline-flex; align-items: center; justify-content: center; gap: 6px; min-height: 36px; padding: 8px 10px; border: 0; border-radius: 999px; background: transparent; color: var(--mesa-text); font-size: 12px; white-space: nowrap; }
+html body.mesa-suite .mesa-account :is(button,a):hover { background: var(--mesa-chip-hover); }
+html body.mesa-suite .mesa-account :is(.session-role,.avatar,.sidebar-help,.app-version) { display: none; }
+html body.mesa-suite .mesa-menu { display: none; }
+html body.mesa-suite .mesa-footer { padding: 22px 24px; display: flex; justify-content: center; gap: 12px; color: var(--mesa-muted); font-size: 12px; }
+html body.mesa-suite main.wrap { width:100%; }
+/* Authentication always uses the same two-column composition. */
+html body.mesa-suite .mesa-login { width: min(100%, 1180px); min-height: calc(100dvh - 64px); margin: auto; padding: 56px 24px; display: grid; grid-template-columns: 1.1fr 1fr; align-items: center; gap: 72px; background: transparent; }
+html body.mesa-suite .mesa-login-intro h1 { white-space: pre-line; color: var(--mesa-blue); font-size: clamp(38px, 4.5vw, 60px); margin: 18px 0; }
+html body.mesa-suite .mesa-login-intro p { color: var(--mesa-muted); max-width: 450px; font-size: 16px; line-height: 1.6; }
+html body.mesa-suite .mesa-login :is(.login-card,.auth-panel) { width: 100%; max-width: 460px; padding: 36px; border: 1px solid var(--mesa-line); border-top: 3px solid var(--mesa-action); border-radius: 24px; }
+html body.mesa-suite .mesa-login :is(.login-card,.auth-panel) h1 { font-size: 28px; color: var(--mesa-text); text-align: left; }
+html body.mesa-suite .mesa-login :is(.login-card,.auth-panel) :is(p,.subtitle) { text-align: left; color: var(--mesa-muted); }
+html body.mesa-suite .mesa-login :is(.login-card,.auth-panel) :is(input,select) { width: 100%; }
+html body.mesa-suite .mesa-login :is(.login-card,.auth-panel) :is(.primary,.button-primary,.btn-primary) { width: 100%; }
+html body.mesa-suite .mesa-login-logo { width: 72px; height: 48px; object-fit: contain; filter: brightness(0); }
+html[data-theme="dark"] body.mesa-suite .mesa-login-logo { filter: brightness(0) invert(1); }
+html body.mesa-suite .mesa-login-title { min-height: 2.24em; white-space: pre-line; }
+@media(max-width:1100px) {
+  html body.mesa-suite .mesa-header { gap: 12px; }
+  html body.mesa-suite .mesa-account :is(.session-user,.user-name,.account-name) { display: none; }
+}
+@media(max-width:800px) {
+  html body.mesa-suite :is(.content,.main-content,.inventory-main,main.wrap) { padding: 28px 18px 56px; }
+  html body.mesa-suite .mesa-header { min-height: 58px; padding: 10px 18px; gap: 10px; }
+  html body.mesa-suite .mesa-menu { display: inline-flex; margin-left: auto; width: 40px; min-height: 40px; font-size: 22px; order: 2; }
+  html body.mesa-suite .mesa-account { margin-left: 0; order: 1; }
+  html body.mesa-suite .mesa-header .mesa-nav { display: none; order: 3; flex: 1 0 100%; max-height: calc(100dvh - 80px); padding: 8px 0; flex-direction: column; align-items: stretch; overflow-y: auto; }
+  html body.mesa-suite .mesa-header .mesa-nav.is-open,
+  html body.mesa-suite .mesa-header.open .mesa-nav { display: flex; }
+  html body.mesa-suite .mesa-nav :is(a,button) { min-height: 44px; font-size: 14px; }
+  html body.mesa-suite :is(.page-heading,.page-header,.inventory-page-header,.mesa-page-heading) { padding: 24px; align-items: flex-start; }
+  html body.mesa-suite .mesa-login { grid-template-columns: minmax(0,1fr); gap: 28px; padding: 32px 18px; min-height: auto; }
+  html body.mesa-suite .mesa-login :is(.login-card,.auth-panel) { max-width: 100%; padding: 28px; }
+  html body.mesa-suite :is(.stats-grid,.metrics,.inventory-stats) { grid-template-columns: repeat(2,minmax(0,1fr)); }
+  html body.mesa-suite :is(.toolbar,.actions,.filter-panel,.filters) { flex-wrap: wrap; }
+}
+@media(max-width:520px) {
+  html body.mesa-suite :is(.stats-grid,.metrics,.inventory-stats) { grid-template-columns: minmax(0,1fr); }
+  html body.mesa-suite .mesa-login-intro h1 { font-size: 40px; }
+  html body.mesa-suite .mesa-brand small { max-width: 115px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+  html body.mesa-suite .mesa-footer { flex-direction: column; align-items: center; gap: 4px; }
+}
+@media(prefers-reduced-motion:reduce) {
+  html body.mesa-suite *, html body.mesa-suite *::before, html body.mesa-suite *::after { scroll-behavior: auto; animation-duration: .01ms; transition-duration: .01ms; }
+}
+}
+@media print {
+  html body.mesa-suite .mesa-header, html body.mesa-suite .mesa-footer { display: none; }
+  html body.mesa-suite { background: #fff; color: #000; }
+}

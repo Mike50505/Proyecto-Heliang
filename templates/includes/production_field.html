@@ -1,0 +1,4 @@
+<div class="field {% if wide %}field-wide{% endif %}">
+  {{ field.label_tag }}{{ field }}{{ field.errors }}
+  {% if field.help_text %}<small class="field-help" id="{{ field.auto_id }}_helptext">{{ field.help_text }}</small>{% endif %}
+</div>

@@ -4,7 +4,7 @@
 <head>
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width,initial-scale=1">
-  <script>document.documentElement.dataset.theme=localStorage.getItem('mesa-theme')||(matchMedia('(prefers-color-scheme: dark)').matches?'dark':'light');</script>
+  {% include 'includes/theme_bootstrap.html' %}
   <title>Tablero de línea · MESA</title>
   <link rel="icon" href="{% static 'logo-mesa.svg' %}" type="image/svg+xml">
   <link rel="stylesheet" href="{% static 'css/line_dashboard.css' %}">
@@ -13,8 +13,12 @@
   <link rel="stylesheet" href="{% static 'css/apple-line.css' %}">
   <link rel="stylesheet" href="{% static 'css/line-navigation.css' %}">
   <link rel="stylesheet" href="{% static 'css/suite-controls.css' %}">
+  <link rel="stylesheet" href="{% static 'mesa/mesa-tokens.css' %}">
+  <link rel="stylesheet" href="{% static 'mesa/mesa-effects.css' %}">
+  <link rel="stylesheet" href="{% static 'css/heiliang-experience.css' %}">
+  <link rel="stylesheet" href="{% static 'css/heiliang-palettes.css' %}">
 </head>
-<body>
+<body class="line-page">
   <canvas class="particle-background" data-particle-background aria-hidden="true"></canvas>
   {% include 'includes/site_header.html' %}
   <header class="line-header">
@@ -163,5 +167,8 @@
   <script src="{% static 'js/particles.js' %}" defer></script>
   <script src="{% static 'js/navigation.js' %}" defer></script>
   <script src="{% static 'js/jelly-controls.js' %}" defer></script>
+  <script src="{% static 'mesa/mesa-navigation.js' %}" defer></script>
+  <script src="{% static 'js/glide-select.js' %}" defer></script>
+  <script src="{% static 'js/heiliang-experience.js' %}" defer></script>
 </body>
 </html>

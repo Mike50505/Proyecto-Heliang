@@ -108,7 +108,7 @@ const fs = require('node:fs');
 
     const layers = await page.evaluate(() => {
       const canvas = mesaParticles.canvas;
-      const button = document.getElementById('theme-toggle');
+      const button = document.getElementById('color-picker-toggle');
       const rect = button.getBoundingClientRect();
       return {pixels:canvas.width*canvas.height, pointerEvents:getComputedStyle(canvas).pointerEvents,
         hit:button.contains(document.elementFromPoint(rect.x+rect.width/2,rect.y+rect.height/2))};
@@ -123,9 +123,13 @@ const fs = require('node:fs');
       await page.waitForTimeout(100);
       if (directory) await page.screenshot({path:path.join(directory, `particles-${theme}.png`)});
     }
-    const previousTheme = await page.locator('html').getAttribute('data-theme');
-    await page.getByRole('button', {name:/Activar modo/}).click();
-    assert.notEqual(await page.locator('html').getAttribute('data-theme'), previousTheme);
+    await page.getByRole('button', {name:'Elegir colores', exact:true}).click();
+    await page.getByRole('combobox', {name:'Paleta de colores', exact:true}).click();
+    await page.getByRole('option', {name:'Oscuro · negro', exact:true}).click();
+    assert.equal(await page.locator('html').getAttribute('data-theme'), 'dark');
+    await page.getByRole('combobox', {name:'Paleta de colores', exact:true}).click();
+    await page.getByRole('option', {name:'Claro · azul MESA', exact:true}).click();
+    assert.equal(await page.locator('html').getAttribute('data-theme'), 'light');
     await page.emulateMedia({reducedMotion:'reduce'});
     await page.waitForTimeout(100);
     const still = await page.evaluate(() => ({positions:JSON.stringify(mesaParticles.particles), frame:mesaParticles.frameId}));

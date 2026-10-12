@@ -1,0 +1,212 @@
+/* Local appearance palettes. Keep shared MESA files and base light/dark semantics. */
+@media screen {
+:root {
+  --h-bg: #f0f5fc;
+  --h-surface: #fff;
+  --h-ink: #1d1d1f;
+  --h-header: rgb(250 250 252 / 92%);
+  --h-particle-opacity: .55;
+}
+html[data-theme="dark"] {
+  --h-bg: #000;
+  --h-surface: #1c1c1e;
+  --h-ink: #f5f5f7;
+  --h-header: rgb(22 22 23 / 94%);
+  --h-particle-opacity: .48;
+}
+html[data-palette="pearl"] {
+  --h-bg: #e8ebee;
+  --h-surface: #f1f3f5;
+  --h-subtle: #e4e8ed;
+  --h-ink: #253341;
+  --h-muted: #526170;
+  --h-accent: #305f8f;
+  --h-action: #315f8d;
+  --h-action-hover: #254d76;
+  --h-border: #c9d0d8;
+  --h-tint: #dce5ed;
+  --h-header: rgb(237 240 243 / 96%);
+  --h-shadow: 0 4px 20px rgb(37 51 65 / 4%);
+  --h-particle-opacity: .26;
+  --h-particle-1: #6f8398;
+  --h-particle-2: #8d9eae;
+  --h-particle-3: #5d7791;
+}
+html[data-palette="ivory"] {
+  --h-bg: #e9e4da;
+  --h-surface: #f3efe6;
+  --h-subtle: #ece7de;
+  --h-ink: #353b40;
+  --h-muted: #62635d;
+  --h-accent: #40617d;
+  --h-action: #3c5b75;
+  --h-action-hover: #2f4b62;
+  --h-border: #d2cabb;
+  --h-tint: #e1e5e4;
+  --h-header: rgb(238 233 223 / 96%);
+  --h-shadow: 0 4px 20px rgb(69 57 38 / 4%);
+  --h-particle-opacity: .25;
+  --h-particle-1: #7a8e9d;
+  --h-particle-2: #ada38c;
+  --h-particle-3: #738591;
+}
+html[data-palette="sage"] {
+  --h-bg: #dfe7e2;
+  --h-surface: #edf2ee;
+  --h-subtle: #e2eae5;
+  --h-ink: #253d35;
+  --h-muted: #4c6258;
+  --h-accent: #365f64;
+  --h-action: #345c69;
+  --h-action-hover: #284752;
+  --h-border: #c1d0c6;
+  --h-tint: #d7e5e1;
+  --h-header: rgb(230 237 232 / 96%);
+  --h-shadow: 0 4px 20px rgb(37 61 53 / 4%);
+  --h-particle-opacity: .25;
+  --h-particle-1: #748e83;
+  --h-particle-2: #7f9d97;
+  --h-particle-3: #5d7d80;
+}
+html[data-palette="slate"] {
+  --h-bg: #1b232d;
+  --h-surface: #252f3b;
+  --h-subtle: #2c3846;
+  --h-ink: #dce3ec;
+  --h-muted: #b0bdcc;
+  --h-accent: #97b9d7;
+  --h-action: #355f86;
+  --h-action-hover: #416f99;
+  --h-border: #485766;
+  --h-tint: #304457;
+  --h-header: rgb(32 42 52 / 96%);
+  --h-shadow: 0 4px 20px rgb(10 15 22 / 12%);
+  --h-particle-opacity: .22;
+  --h-particle-1: #91a8bb;
+  --h-particle-2: #819dab;
+  --h-particle-3: #afc1cf;
+  --green: #9cc9ac;
+  --amber: #dac49a;
+  --orange: #dac49a;
+  --violet: #bcb4d5;
+  --purple: #bcb4d5;
+}
+html:is([data-palette="pearl"],[data-palette="ivory"],[data-palette="sage"]) {
+  --green: #326645;
+  --amber: #815b23;
+  --orange: #815b23;
+  --violet: #5c527c;
+  --purple: #5c527c;
+}
+/* Bridge semantic colors to every existing component, including the line board. */
+html[data-palette] {
+  --bg: var(--h-bg);
+  --mesa-bg: var(--h-bg);
+  --mesa-surface: var(--h-surface);
+  --mesa-surface-soft: var(--h-subtle);
+  --mesa-text: var(--h-ink);
+  --mesa-muted: var(--h-muted);
+  --mesa-line: var(--h-border);
+  --mesa-blue: var(--h-accent);
+  --mesa-action: var(--h-action);
+  --mesa-accent-soft: var(--h-tint);
+  --mesa-header: var(--h-header);
+  --white: var(--h-surface);
+  --panel: var(--h-surface);
+  --panel2: var(--h-surface);
+  --text: var(--h-ink);
+  --muted: var(--h-muted);
+  --line: var(--h-border);
+  --blue: var(--h-accent);
+  --cyan: var(--h-accent);
+  --surface: var(--h-subtle);
+  --surface-soft: var(--h-subtle);
+  --surface-tint: var(--h-subtle);
+  --accent-soft: var(--h-tint);
+  --header-bg: var(--h-header);
+  --nav-chip-bg: var(--h-subtle);
+  --nav-chip-hover: var(--h-tint);
+  --control-action: var(--h-action);
+}
+html[data-palette] :is(.glide-select,.glide-select__menu) {
+  --gs-surface: var(--h-surface);
+  --gs-accent: var(--h-accent);
+  --gs-text: var(--h-ink);
+  --gs-muted: var(--h-muted);
+  --gs-line: var(--h-border);
+  --gs-highlight: color-mix(in srgb,var(--h-accent) 14%,transparent);
+}
+html[data-palette] body { background: var(--h-bg); color: var(--h-ink); }
+html[data-palette] .particle-background { opacity: var(--h-particle-opacity); }
+html[data-palette="slate"] :is(.classic-values,.bar-values,.machine-job small,.line-clock small) { color: var(--h-muted); }
+/* Home accents follow the selected palette without filling the module cards. */
+html[data-palette] body:has(.dashboard-modules) .hero {
+  border-left: 4px solid var(--h-accent);
+}
+html[data-palette] .dashboard-modules .module-card {
+  background: linear-gradient(115deg, color-mix(in srgb, var(--h-accent) 4%, var(--h-surface)), var(--h-surface) 68%);
+}
+html[data-palette] .dashboard-modules .module-card .module-icon {
+  background: color-mix(in srgb, var(--h-accent) 17%, var(--h-surface));
+}
+html[data-palette] .dashboard-modules .module-card i,
+html[data-palette] body:has(.dashboard-modules) .cards strong {
+  color: var(--h-accent);
+}
+html[data-palette] .dashboard-modules .module-card:is(:hover,:focus-visible) {
+  border-color: color-mix(in srgb, var(--h-accent) 50%, var(--h-border));
+  box-shadow: 0 8px 22px color-mix(in srgb, var(--h-accent) 10%, transparent);
+}
+/* Restore the MESA blue banners only in its classic light palette. */
+html[data-palette="classic"] :is(.hero,.heliang-hero) {
+  background: linear-gradient(110deg, #004b96, #086bc6);
+  border-color: #0758a7;
+  box-shadow: 0 12px 30px rgb(0 83 166 / 16%);
+  color: #fff;
+}
+html[data-palette="classic"] :is(.hero,.heliang-hero) h1,
+html[data-palette="classic"] .hero-date,
+html[data-palette="classic"] .heliang-kpis b { color: #fff; }
+html[data-palette="classic"] :is(.hero,.heliang-hero) p,
+html[data-palette="classic"] :is(.hero,.heliang-hero) .eyebrow,
+html[data-palette="classic"] .hero-date small,
+html[data-palette="classic"] .heliang-kpis span { color: #e4f1ff; }
+html[data-palette="classic"] .heliang-kpis span {
+  background: rgb(255 255 255 / 12%);
+  border-color: rgb(255 255 255 / 22%);
+}
+.color-picker { display: flex; align-items: center; }
+.site-header .palette-toggle { gap: 7px; }
+.palette-toggle svg { flex: none; }
+.color-picker-panel[hidden] { display: none; }
+.color-picker-panel {
+  position: fixed; z-index: 140; top: 64px; right: 16px;
+  width: min(320px,calc(100vw - 32px)); max-height: calc(100dvh - 84px);
+  overflow-y: auto; padding: 22px; border: 1px solid var(--h-border);
+  border-radius: 18px; background: var(--h-surface); color: var(--h-ink);
+  box-shadow: 0 12px 40px rgb(0 0 0 / 16%); text-align: left;
+}
+.color-picker-panel h2 { margin: 0; font-size: 19px; line-height: 1.3; }
+.color-picker-intro { margin: 8px 0 20px; color: var(--h-muted); font-size: 12px; line-height: 1.5; }
+.color-picker-panel > label { display: block; margin-bottom: 7px; font-size: 12px; font-weight: 600; }
+.color-picker-panel > select { width: 100%; }
+.palette-preview { display: flex; align-items: center; justify-content: space-between; gap: 24px; min-height: 90px; margin-top: 18px; padding: 16px; border: 1px solid var(--h-border); border-radius: 12px; background: var(--h-bg); }
+.palette-preview-surface { display: flex; flex-direction: column; gap: 7px; width: 70%; padding: 12px; border-radius: 8px; background: var(--h-surface); }
+.palette-preview-surface i { height: 3px; width: 80%; border-radius: 2px; background: var(--h-muted); }
+.palette-preview-surface i:first-child { width: 60%; height: 5px; background: var(--h-ink); }
+.palette-preview-surface i:last-child { width: 45%; }
+.palette-preview-action { width: 36px; height: 36px; flex: none; border-radius: 50%; background: var(--h-action); }
+.color-mode-description { min-height: 3em; margin: 14px 0 12px; color: var(--h-muted); font-size: 12px; line-height: 1.5; }
+.color-picker-saved { display: block; padding-top: 12px; border-top: 1px solid var(--h-border); color: var(--h-muted); font-size: 10px; line-height: 1.5; }
+.color-picker-panel :focus-visible { outline: 3px solid var(--h-accent); outline-offset: 3px; }
+@media (max-width:1100px) {
+  /* Leave room for the centered module navigation on typical workstations. */
+  .site-header .palette-toggle { width: 34px; padding: 7px; }
+  .site-header .palette-toggle b { display: none; }
+}
+@media (max-width:800px) {
+  .site-header .palette-toggle { width: 34px; padding: 7px; }
+  .site-header .palette-toggle b { display: none; }
+  .color-picker-panel { padding: 20px; }
+}
+}

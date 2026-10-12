@@ -1,0 +1,38 @@
+/* MESA corporate UI. Source: Heiliang. Distributed by sync_design.py. */
+@media screen {
+:root {
+  --mesa-bg: #f0f5fc;
+  --mesa-surface: #fff;
+  --mesa-surface-soft: #fbfbfd;
+  --mesa-text: #1d1d1f;
+  --mesa-muted: #6e6e73;
+  --mesa-line: #d2d2d7;
+  --mesa-blue: #005bb5;
+  --mesa-action: #005bb5;
+  --mesa-accent-soft: #deedff;
+  --mesa-chip: #e9eef5;
+  --mesa-chip-hover: #dceafd;
+  --mesa-header: rgb(250 250 252 / 92%);
+  --mesa-hero: #0052a3;
+  --mesa-shadow: 0 12px 36px rgb(0 0 0 / 5%);
+  --mesa-radius: 22px;
+  --mesa-font: -apple-system, BlinkMacSystemFont, "SF Pro Text", "Segoe UI", Arial, sans-serif;
+}
+html[data-theme="dark"] {
+  --mesa-bg: #000;
+  --mesa-surface: #1c1c1e;
+  --mesa-surface-soft: #242426;
+  --mesa-text: #f5f5f7;
+  --mesa-muted: #a1a1a6;
+  --mesa-line: #424245;
+  --mesa-blue: #64aaff;
+  --mesa-action: #006bd6;
+  --mesa-accent-soft: #10365c;
+  --mesa-chip: #242426;
+  --mesa-chip-hover: #12365b;
+  --mesa-header: rgb(22 22 23 / 94%);
+  --mesa-hero: #06417d;
+  --mesa-shadow: 0 16px 40px rgb(0 0 0 / 22%);
+}
+
+}

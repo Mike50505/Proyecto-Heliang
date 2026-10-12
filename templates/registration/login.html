@@ -12,6 +12,7 @@
     <h2 id="login-title">Inicia sesión</h2>
     <p>Ingresa tus datos para continuar.</p>
     <form method="post">{% csrf_token %}{{ form.as_p }}<button type="submit">Ingresar</button></form>
+    <div class="login-caption">Acceso con tu cuenta de trabajo MESA</div>
   </section>
 </div>
 <script src="{% static 'js/text-type.js' %}" defer></script>

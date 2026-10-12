@@ -1,0 +1,12 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<svg xmlns="http://www.w3.org/2000/svg" width="1168" height="540" viewBox="0 0 292 135" role="img" aria-labelledby="title desc">
+  <title id="title">MESA — logo azul</title>
+  <desc id="desc">Logotipo MESA vectorial, con letras y marco azules sobre fondo transparente.</desc>
+  <path id="marco" fill="#0057B8" fill-rule="evenodd" d="M140 1H153L266 20C280 22 288 29 288 41V89C288 103 281 110 267 113L158 132H134L25 113C11 110 4 103 4 89V42C4 30 11 23 25 20ZM146 11L26 31C20 32 17 37 17 43V88C17 95 20 99 27 100L145 118H152L269 100C273 99 276 96 276 90V42C276 36 273 33 266 31L150 11Z"/>
+  <g id="letras" fill="#0057B8">
+    <path id="M" d="M39 93V34H49L67 70L83 34H95V93H83V67L71 93H61L51 68V93Z"/>
+    <path id="E" d="M100 34H148V46H114V59H148V70H114V82H148V93H100Z"/>
+    <path id="S" d="M202 35V46H175C170 46 168 48 168 52C168 56 170 58 175 58H183C195 58 203 65 203 76C203 86 195 93 184 93H154V82H184C188 82 190 80 190 76C190 72 188 70 183 70H171C160 70 153 63 153 53C153 43 160 35 171 35Z"/>
+    <path id="A" fill-rule="evenodd" d="M203 93L225 35H237L259 93H245L242 86H219L216 93ZM222 75H240L230 54Z"/>
+  </g>
+</svg>

@@ -1,0 +1,15 @@
+<script>
+(() => {
+  const modes = {classic:'light', night:'dark', pearl:'light', ivory:'light', sage:'light', slate:'dark'};
+  let palette;
+  try {
+    const saved = localStorage.getItem('heiliang-color-mode');
+    const previous = localStorage.getItem('mesa-theme');
+    palette = Object.hasOwn(modes, saved) ? saved : (previous === 'dark' || (!previous && matchMedia('(prefers-color-scheme: dark)').matches) ? 'night' : 'classic');
+  } catch {
+    palette = matchMedia('(prefers-color-scheme: dark)').matches ? 'night' : 'classic';
+  }
+  document.documentElement.dataset.theme = modes[palette];
+  document.documentElement.dataset.palette = palette;
+})();
+</script>

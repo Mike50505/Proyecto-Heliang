@@ -1,0 +1,21 @@
+<div class="color-picker">
+  <button id="color-picker-toggle" class="theme-toggle palette-toggle" type="button" aria-label="Elegir colores" aria-expanded="false" aria-controls="color-picker-panel">
+    <svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="1.7" aria-hidden="true"><path d="M12 3a9 9 0 1 0 0 18h1a2 2 0 0 0 1.6-3.2 1.8 1.8 0 0 1 1.4-2.9h1a4 4 0 0 0 4-4C21 6.5 17 3 12 3Z"/><circle cx="7.5" cy="10" r=".8"/><circle cx="11" cy="6.8" r=".8"/><circle cx="15.5" cy="8" r=".8"/></svg><b>Colores</b>
+  </button>
+  <section id="color-picker-panel" class="color-picker-panel" data-color-panel aria-labelledby="color-picker-title" hidden>
+    <h2 id="color-picker-title">Apariencia</h2>
+    <p class="color-picker-intro">Elige los tonos que te resulten más cómodos.</p>
+    <label for="color-mode">Paleta de colores</label>
+    <select id="color-mode" name="color-mode">
+      <option value="classic">Claro · azul MESA</option>
+      <option value="pearl">Perla · gris suave</option>
+      <option value="ivory">Marfil · tonos cálidos</option>
+      <option value="sage">Salvia · verde tenue</option>
+      <option value="slate">Pizarra · oscuro suave</option>
+      <option value="night">Oscuro · negro</option>
+    </select>
+    <div class="palette-preview" aria-hidden="true"><span class="palette-preview-surface"><i></i><i></i><i></i></span><span class="palette-preview-action"></span></div>
+    <p id="color-mode-description" class="color-mode-description" role="status"></p>
+    <small class="color-picker-saved">Tu elección se guarda en este navegador.</small>
+  </section>
+</div>
