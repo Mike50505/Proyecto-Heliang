@@ -243,6 +243,13 @@ class CloseProductionForm(forms.Form):
         self.fields["work_item"].queryset = WorkInProcess.objects.filter(status=WorkInProcess.Status.ACTIVE).select_related("order", "machine")
 
 
+class DeleteProductionCloseForm(forms.Form):
+    reason = forms.CharField(
+        label="Motivo de la eliminación", max_length=500,
+        widget=forms.Textarea(attrs={"rows": 3}),
+        help_text="El motivo quedará registrado junto con tu usuario en la auditoría.")
+
+
 class ReleaseProductionForm(forms.Form):
     work_item = WorkChoiceField(label="Orden procesando", queryset=WorkInProcess.objects.none())
 

@@ -82,6 +82,10 @@ class ProductionCloseAdmin(admin.ModelAdmin):
     list_display = ("folio", "work_item", "quantity", "weight_kg", "closed_at", "shift")
     search_fields = ("folio", "work_item__folio", "work_item__order__part__number")
     list_filter = ("shift", "closed_at")
+
+    def has_delete_permission(self, request, obj=None):
+        # Report deletion must restore balances and record the reason.
+        return False
 @admin.register(AuditEvent)
 class AuditEventAdmin(admin.ModelAdmin):
     list_display = ("created_at", "user", "action", "entity", "entity_id")

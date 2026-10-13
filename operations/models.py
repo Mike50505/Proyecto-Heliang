@@ -217,6 +217,7 @@ class ModuleAccess(models.Model):
     surplus = models.BooleanField("material sobrante", default=False)
     process_material = models.BooleanField("material en proceso", default=False)
     reports = models.BooleanField("reportes", default=False)
+    reports_delete_closes = models.BooleanField("eliminar cierres desde reportes", default=False)
     universe = models.BooleanField("consultar Universo Ramos Arizpe", default=False)
     universe_edit = models.BooleanField("editar Universo Ramos Arizpe", default=False)
     universe_import = models.BooleanField("importar Universo Ramos Arizpe", default=False)

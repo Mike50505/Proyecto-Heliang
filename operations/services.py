@@ -1,11 +1,12 @@
 import re
 from datetime import date, time
 from decimal import Decimal
-from django.core.exceptions import ValidationError
+from django.core.exceptions import PermissionDenied, ValidationError
 from django.db import transaction
 from django.db.models import F, Sum
 from django.utils import timezone
 from .formatting import diameter_category
+from .access import access_for
 from .models import (AuditEvent, Client, Inventory, InventoryBucket, Movement, Part,
                      ProductionClose, ProductionOrder, WorkInProcess, FolioCounter,
                      Machine)
@@ -30,8 +31,8 @@ def next_folio(model, prefix, moment=None):
     sequence = counter.next_value
     if created:
         historical_folios = set(AuditEvent.objects.filter(
-            entity="ProductionOrder", entity_id__startswith=base
-        ).values_list("entity_id", flat=True)) if model is ProductionOrder else set()
+            entity=model.__name__, entity_id__startswith=base
+        ).values_list("entity_id", flat=True)) if model in (ProductionOrder, ProductionClose) else set()
         existing_folios = model.objects.filter(
             folio__startswith=base).values_list("folio", flat=True)
         for folio in [*existing_folios, *historical_folios]:
@@ -450,3 +451,59 @@ def close_production(*, work_item, quantity, employee=None, user=None, comment="
     AuditEvent.objects.create(user=user, action="CLOSE_PRODUCTION", entity="ProductionClose", entity_id=close.folio,
         data={"work_item": work.folio, "quantity": str(quantity), "weight_kg": str(close.weight_kg)})
     return close
+
+
+@transaction.atomic
+def delete_production_close(*, close_id, reason, user):
+    """Undo a close without reactivating a machine that has already been released."""
+    access = access_for(user)
+    if not user.is_active or not access.reports or not access.reports_delete_closes:
+        raise PermissionDenied("No tienes permiso para eliminar cierres.")
+    reason = reason.strip()
+    if not reason or len(reason) > 500:
+        raise ValidationError("Indica un motivo de eliminación de hasta 500 caracteres.")
+    reference = ProductionClose.objects.filter(pk=close_id).values("work_item_id").first()
+    if reference is None:
+        raise ValidationError("El cierre ya fue eliminado. Recarga los reportes.")
+    work = WorkInProcess.objects.select_for_update().get(pk=reference["work_item_id"])
+    order = ProductionOrder.objects.select_for_update().get(pk=work.order_id)
+    close = ProductionClose.objects.select_for_update().filter(pk=close_id).first()
+    if close is None:
+        raise ValidationError("El cierre ya fue eliminado. Recarga los reportes.")
+    if close.work_item_id != work.pk:
+        raise ValidationError("El cierre cambió. Recarga los reportes.")
+    if order.status == ProductionOrder.Status.CANCELLED:
+        raise ValidationError("No se puede devolver producción a una orden cancelada.")
+    active = work.status == WorkInProcess.Status.ACTIVE
+    if active:
+        if work.remaining_quantity + close.quantity > work.initial_quantity:
+            raise ValidationError("La devolución supera la cantidad inicial del proceso.")
+    else:
+        if order.remaining_quantity + close.quantity > order.quantity:
+            raise ValidationError("La devolución supera la cantidad total de la orden.")
+        _lock_open_order_capacity()
+        if order.status != ProductionOrder.Status.OPEN:
+            check_open_order_capacity(quantity=order.quantity, exclude_order_id=order.pk)
+    snapshot = {
+        "reason": reason, "close_id": close.pk, "work_item": work.folio,
+        "order": order.folio, "quantity": str(close.quantity),
+        "weight_kg": str(close.weight_kg), "closed_at": close.closed_at.isoformat(),
+        "closed_by_id": close.closed_by_id, "shift": close.shift,
+        "closed_by_username": close.closed_by.username if close.closed_by_id else "",
+        "comment": close.comment, "returned_to": "work" if active else "order",
+        "previous_order_status": order.status,
+        "previous_order_remaining": str(order.remaining_quantity),
+        "previous_work_remaining": str(work.remaining_quantity),
+        "program": order.program, "part_id": order.part_id, "machine_id": work.machine_id,
+    }
+    if active:
+        work.remaining_quantity += close.quantity
+        work.save(update_fields=["remaining_quantity", "updated_at"])
+    else:
+        order.remaining_quantity += close.quantity
+        order.status = ProductionOrder.Status.OPEN
+        order.save(update_fields=["remaining_quantity", "status", "updated_at"])
+    AuditEvent.objects.create(user=user, action="DELETE_PRODUCTION_CLOSE",
+                              entity="ProductionClose", entity_id=close.folio, data=snapshot)
+    close.delete()
+    return snapshot

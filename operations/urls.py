@@ -30,4 +30,5 @@ urlpatterns = [
          views.download_universe_new_parts_template, name="download-universe-new-parts-template"),
     path("reportes/", views.report, name="report"),
     path("reportes/csv/", views.report_csv, name="report-csv"),
+    path("reportes/cierres/<int:pk>/eliminar/", views.delete_close, name="delete-close"),
 ]

@@ -129,4 +129,25 @@ Referencias: [variables de Compose](https://docs.docker.com/compose/how-tos/envi
 - Historial y exportación CSV.
 - Usuarios, catálogos y auditoría desde Django Admin.
 
+## Corrección de cierres desde Reportes
+
+En `/admin/`, abre **Usuarios**, selecciona a la persona y activa **reportes** y
+**eliminar cierres desde reportes** en sus accesos a módulos. El nuevo permiso
+está desactivado por defecto; los superusuarios tienen acceso.
+
+En Reportes aparece **Eliminar cierre** para las personas autorizadas. La pantalla
+de confirmación exige un motivo y muestra las piezas que se devolverán. Si el
+proceso sigue activo, las piezas vuelven a su saldo; si ya terminó, vuelven a la
+orden disponible sin reactivar la máquina. Esto permite recuperar, por ejemplo,
+un saldo de 0.9 piezas al eliminar un cierre incorrecto de 0.1.
+
+El cierre se elimina de reportes y gráficas; la auditoría conserva su folio,
+cantidad, peso, fecha, operador original, usuario que eliminó y motivo.
+La devolución se bloquea si excede el saldo permitido o intenta reabrir una orden
+por encima de la capacidad global. La eliminación directa en Django Admin está
+deshabilitada para evitar que se omita la devolución de piezas.
+
+Para habilitar el nuevo permiso en una instalación existente, ejecuta
+`python manage.py migrate` (Docker también aplica migraciones al arrancar).
+
 # Proyecto-Heliang

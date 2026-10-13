@@ -24,7 +24,7 @@ from openpyxl.utils.datetime import to_excel
 from openpyxl.worksheet.datavalidation import DataValidation
 from openpyxl.utils.exceptions import InvalidFileException
 from .access import access_for, module_required
-from .forms import (BulkProgramForm, CloseProductionForm, ReleaseProductionForm, ProcessMovementForm,
+from .forms import (BulkProgramForm, CloseProductionForm, DeleteProductionCloseForm, ReleaseProductionForm, ProcessMovementForm,
                     ProductionOrderEditForm, ProgramOrderForm, StartProductionForm,
                     SurplusMovementForm, UniverseImportForm, UniverseNewPartsForm, UniversePartForm)
 from .formatting import (diameter_category, diameter_category_sort_key,
@@ -35,7 +35,7 @@ from .security import MAX_XLSX_ROWS, spreadsheet_safe, validate_xlsx_archive
 from .universe_upload import HEADERS as NEW_PART_HEADERS, import_new_universe_parts
 from .services import (open_order_total, check_open_order_capacity,
                        close_production, release_production, create_program_order, move_process_material, move_surplus,
-                       delete_production_orders, edit_production_order, resolve_program_client,
+                       delete_production_close, delete_production_orders, edit_production_order, resolve_program_client,
                        set_production_order_priority, reorder_production_order_within_diameter, start_production)
 
 
@@ -1260,6 +1260,32 @@ def report(request):
     return render(request, "operations/report.html", {
         "rows": rows[:1000], "machines": machines, "shifts": shifts,
         "query_string": request.GET.urlencode(), **filters,
+    })
+
+
+@login_required
+@module_required("reports")
+@module_required("reports_delete_closes")
+def delete_close(request, pk):
+    close = get_object_or_404(ProductionClose.objects.select_related(
+        "work_item__order__part", "work_item__machine"), pk=pk)
+    form = DeleteProductionCloseForm(request.POST if request.method == "POST" else None)
+    if request.method == "POST" and form.is_valid():
+        try:
+            result = delete_production_close(close_id=pk, reason=form.cleaned_data["reason"],
+                                              user=request.user)
+        except ValidationError as exc:
+            form.add_error(None, exc)
+        else:
+            destination = "al proceso activo" if result["returned_to"] == "work" else "a la orden disponible"
+            messages.success(request, f"Cierre {close.folio} eliminado. Se devolvieron {result['quantity']} piezas {destination}.")
+            response = redirect("report")
+            if request.GET:
+                response["Location"] += "?" + request.GET.urlencode()
+            return response
+    return render(request, "operations/close_confirm_delete.html", {
+        "close": close, "form": form, "query_string": request.GET.urlencode(),
+        "return_to_work": close.work_item.status == WorkInProcess.Status.ACTIVE,
     })
 
 
