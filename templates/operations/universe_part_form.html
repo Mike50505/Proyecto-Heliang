@@ -1,0 +1,17 @@
+{% extends 'base.html' %}
+{% block title %}Editar pieza · MESA{% endblock %}
+{% block content %}
+<section class="form-card">
+  <span class="eyebrow">UNIVERSO · CATÁLOGO DE PIEZAS</span>
+  <h1>Editar pieza {{ original_number }}</h1>
+  <p>Actualiza el número de parte, cliente, diámetro y peso unitario. Los cambios del catálogo se reflejan en las órdenes vinculadas a esta pieza.</p>
+  <form method="post">
+    {% csrf_token %}
+    {{ form.as_p }}
+    <div class="form-actions">
+      <a class="button secondary" href="{% url 'universe' %}{% if query_string %}?{{ query_string }}{% endif %}">Cancelar</a>
+      <button type="submit">Guardar cambios</button>
+    </div>
+  </form>
+</section>
+{% endblock %}

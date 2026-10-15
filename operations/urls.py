@@ -26,6 +26,7 @@ urlpatterns = [
     path("inventario/sobrante/", views.surplus, name="surplus"),
     path("procesos/", views.process_list, name="process-list"),
     path("universo-ramos-arizpe/", views.universe, name="universe"),
+    path("universo-ramos-arizpe/<int:pk>/editar/", views.edit_universe_part, name="edit-universe-part"),
     path("universo-ramos-arizpe/plantilla-piezas.xlsx",
          views.download_universe_new_parts_template, name="download-universe-new-parts-template"),
     path("reportes/", views.report, name="report"),

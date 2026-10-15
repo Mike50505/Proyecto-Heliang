@@ -692,8 +692,14 @@ def download_universe_new_parts_template(request):
 @login_required
 @module_required("universe")
 def universe(request):
-    edit_part = get_object_or_404(Part, pk=request.POST.get("part_id")) if request.method == "POST" and request.POST.get("action") == "edit" else None
-    part_form = UniversePartForm(request.POST or None, instance=edit_part)
+    if request.method == "POST" and request.POST.get("action") == "edit":
+        try:
+            part_id = int(request.POST.get("part_id", ""))
+        except (TypeError, ValueError):
+            messages.error(request, "Selecciona una pieza válida para editar.")
+            return redirect("universe")
+        return edit_universe_part(request, part_id)
+    part_form = UniversePartForm(request.POST or None)
     import_form = UniverseImportForm(request.POST or None, request.FILES or None)
     new_parts_form = UniverseNewPartsForm(
         request.POST if request.POST.get("action") == "import_new" else None,
@@ -713,14 +719,6 @@ def universe(request):
         part.universe_added_at = timezone.now()
         part.save()
         messages.success(request, "La pieza se agregó al Universo Ramos Arizpe.")
-        return redirect("universe")
-    if request.method == "POST" and action == "edit" and part_form.is_valid():
-        part = part_form.save(commit=False)
-        if not part.in_universe_ramos:
-            part.universe_added_at = timezone.now()
-        part.in_universe_ramos = True
-        part.save()
-        messages.success(request, "Pieza actualizada correctamente.")
         return redirect("universe")
     if request.method == "POST" and action == "import" and import_form.is_valid():
         try:
@@ -771,6 +769,46 @@ def universe(request):
         "ramos_total": Part.objects.filter(in_universe_ramos=True).count(),
         "universe_total": len(catalog_parts), "universe_diameter_count": len(diameters),
         "universe_client_count": len(clients),
+        "query_string": request.GET.urlencode(),
+    })
+
+
+@login_required
+@module_required("universe")
+@module_required("universe_edit")
+def edit_universe_part(request, pk):
+    def snapshot(part):
+        return {"number": part.number, "client_id": part.client_id,
+                "diameter": part.diameter,
+                "unit_weight_kg": str(part.unit_weight_kg) if part.unit_weight_kg is not None else None}
+
+    part = get_object_or_404(Part, pk=pk)
+    original_number = part.number
+    if request.method == "POST":
+        try:
+            with transaction.atomic():
+                part = get_object_or_404(Part.objects.select_for_update(), pk=pk)
+                before = snapshot(part)
+                form = UniversePartForm(request.POST, instance=part)
+                if form.is_valid():
+                    part = form.save()
+                    after = snapshot(part)
+                    if before != after:
+                        AuditEvent.objects.create(
+                            user=request.user, action="EDIT_UNIVERSE_PART", entity="Part",
+                            entity_id=str(part.pk), data={"before": before, "after": after})
+                    messages.success(request, f"Pieza {part.number} actualizada correctamente.")
+                    response = redirect("universe")
+                    if request.GET:
+                        response["Location"] += "?" + request.GET.urlencode()
+                    return response
+        except IntegrityError:
+            form.add_error("number", "Este número de parte ya está registrado. Revisa el dato e intenta de nuevo.")
+    else:
+        form = UniversePartForm(instance=part)
+    return render(request, "operations/universe_part_form.html", {
+        "form": form, "original_number": original_number,
+        "query_string": request.GET.urlencode(),
     })
 
 

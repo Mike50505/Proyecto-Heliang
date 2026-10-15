@@ -46,8 +46,8 @@
   <a class="button secondary" href="{% url 'universe' %}{% if show_all_parts %}?catalog=all{% endif %}">Limpiar</a>
 </form>
 <section class="panel table-wrap"><table>
-  <thead><tr><th>N.º de parte</th><th>Cliente</th><th>Diámetro</th><th>Peso unitario</th><th>Fecha de subida</th>{% if show_all_parts %}<th>En Universo Ramos</th>{% endif %}</tr></thead>
-  <tbody>{% for part in parts %}<tr><td><b>{{ part.number }}</b></td><td>{{ part.client.name|default:'—' }}</td><td>{{ part.diameter|default:'—' }}</td><td>{{ part.unit_weight_kg|default:'—' }}</td><td>{{ part.universe_added_at|date:'Y-m-d'|default:'—' }}</td>{% if show_all_parts %}<td>{% if part.in_universe_ramos %}Sí{% else %}No{% endif %}</td>{% endif %}</tr>{% empty %}<tr><td colspan="{% if show_all_parts %}6{% else %}5{% endif %}">No hay piezas que coincidan.</td></tr>{% endfor %}</tbody>
+  <thead><tr><th>N.º de parte</th><th>Cliente</th><th>Diámetro</th><th>Peso unitario</th><th>Fecha de subida</th>{% if show_all_parts %}<th>En Universo Ramos</th>{% endif %}{% if module_access.universe_edit %}<th>Acciones</th>{% endif %}</tr></thead>
+  <tbody>{% for part in parts %}<tr><td><b>{{ part.number }}</b></td><td>{{ part.client.name|default:'—' }}</td><td>{{ part.diameter|default:'—' }}</td><td>{{ part.unit_weight_kg|default_if_none:'—' }}</td><td>{{ part.universe_added_at|date:'Y-m-d'|default:'—' }}</td>{% if show_all_parts %}<td>{% if part.in_universe_ramos %}Sí{% else %}No{% endif %}</td>{% endif %}{% if module_access.universe_edit %}<td><a class="button secondary" aria-label="Editar pieza {{ part.number }}" href="{% url 'edit-universe-part' part.pk %}{% if query_string %}?{{ query_string }}{% endif %}">Editar</a></td>{% endif %}</tr>{% empty %}<tr><td colspan="{% if show_all_parts %}{% if module_access.universe_edit %}7{% else %}6{% endif %}{% else %}{% if module_access.universe_edit %}6{% else %}5{% endif %}{% endif %}">No hay piezas que coincidan.</td></tr>{% endfor %}</tbody>
 </table></section>
 
 

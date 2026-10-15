@@ -34,6 +34,15 @@ En la página **Universo Ramos Arizpe**, usa **Actualizar desde Excel** y selecc
 
 Para dar de alta piezas sin reemplazar el Universo, descarga la plantilla de **Agregar piezas desde Excel**. Llena la hoja `Sheet1` con número de parte y cliente; diámetro y peso son opcionales. La carga rechaza números repetidos, incluso si solo cambia el uso de mayúsculas, y no guarda ninguna fila si el archivo tiene errores. La tabla permite filtrar por fecha de incorporación al Universo y se ordena desde la primera subida hasta la última; los registros sin fecha quedan al final.
 
+### Editar piezas del Universo
+
+En **Universo Ramos Arizpe**, cada pieza muestra **Editar** para las cuentas con
+los permisos **consultar Universo Ramos Arizpe** y **editar Universo Ramos Arizpe**.
+El formulario permite cambiar número de parte, cliente, diámetro y peso unitario;
+valida duplicados y conserva la pieza vinculada a sus órdenes e inventario.
+La fecha de incorporación y la pertenencia al Universo no cambian al editar.
+Los cambios quedan registrados en auditoría y al volver se conservan los filtros.
+
 ## Docker y PostgreSQL
 
 ```bash
