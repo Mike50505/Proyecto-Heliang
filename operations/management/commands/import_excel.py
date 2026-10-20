@@ -62,6 +62,8 @@ class Command(BaseCommand):
         parser.add_argument("--dry-run", action="store_true")
 
     def handle(self, *args, **options):
+        from operations.universe_api import require_local_catalog
+        require_local_catalog()
         source = options["workbook"]
         if not source.exists(): raise CommandError(f"No existe {source}")
         stats = Counter()

@@ -4,7 +4,7 @@ from hashlib import sha256
 from django import forms
 from django.contrib.auth.forms import AuthenticationForm
 from django.db import transaction
-from django.db.models import Case, IntegerField, Value, When
+from django.db.models import Case, IntegerField, Q, Value, When
 from django.utils import timezone
 from .formatting import format_diameter_fraction
 from .models import (Client, LoginThrottle, Machine, Part, Process,
@@ -54,7 +54,7 @@ class OrderChoiceField(forms.ModelChoiceField):
     def label_from_instance(self, obj):
         diameter = (f" · diámetro {format_diameter_fraction(obj.part.diameter)}"
                     if obj.part.diameter else "")
-        return (f"{obj.folio} · {obj.program} · {obj.part.number}{diameter}"
+        return (f"{obj.folio} · {obj.program} · {obj.part_display}{diameter}"
                 f" · saldo {format(obj.remaining_quantity.normalize(), 'f')}")
 
 
@@ -62,20 +62,22 @@ class OrderChoiceField(forms.ModelChoiceField):
         diameter = (f" · diámetro {format_diameter_fraction(obj.part.diameter)}"
                     if obj.part.diameter else "")
         priority = f"PRIORIDAD {obj.priority:02d} · " if obj.priority else ""
-        return f"{priority}{obj.folio} · {obj.program} · {obj.part.number}{diameter} · saldo {format(obj.remaining_quantity.normalize(), 'f')}"
+        return f"{priority}{obj.folio} · {obj.program} · {obj.part_display}{diameter} · saldo {format(obj.remaining_quantity.normalize(), 'f')}"
 
 
 class WorkChoiceField(forms.ModelChoiceField):
     def label_from_instance(self, obj):
-        return (f"{obj.folio} · {obj.order.program} · {obj.order.part.number} · "
+        return (f"{obj.folio} · {obj.order.program} · {obj.order.part_display} · "
                 f"{obj.machine.code} · saldo {format(obj.remaining_quantity.normalize(), 'f')}")
 
 
 class ProgramOrderForm(forms.Form):
-    client = forms.CharField(label="Cliente", max_length=120)
-    part_number = forms.CharField(label="N.º de parte", max_length=80)
+    is_sample = forms.BooleanField(label="Muestra", required=False,
+        help_text="Al marcarla, esta orden nueva requiere 5 piezas.")
+    client = forms.CharField(label="Cliente", max_length=150)
+    part_number = forms.CharField(label="N.º de parte", max_length=120)
     program = forms.CharField(label="Programa / orden del cliente", max_length=80)
-    quantity = forms.IntegerField(label="Cantidad", min_value=1)
+    quantity = forms.IntegerField(label="Cantidad", min_value=1, required=False)
     required_date = forms.DateField(label="Fecha de entrega", required=False,
                                     widget=forms.DateInput(attrs={"type": "date"}))
     line = forms.CharField(label="Línea del cliente", max_length=80, required=False)
@@ -84,12 +86,20 @@ class ProgramOrderForm(forms.Form):
     comment = forms.CharField(label="Comentarios", required=False,
                               widget=forms.Textarea(attrs={"rows": 2}))
 
+    def clean(self):
+        cleaned = super().clean()
+        if cleaned.get('is_sample'):
+            cleaned['quantity'] = 5
+        elif cleaned.get('quantity') is None:
+            self.add_error('quantity', 'La cantidad es obligatoria.')
+        return cleaned
+
 
 class ProductionOrderEditForm(forms.ModelForm):
     quantity = forms.IntegerField(label="Cantidad total", min_value=1)
     class Meta:
         model = ProductionOrder
-        fields = ("program", "part", "quantity", "required_date", "line", "priority")
+        fields = ("program", "part", "is_sample", "quantity", "required_date", "line", "priority")
         widgets = {"required_date": forms.DateInput(attrs={"type": "date"})}
         labels = {
             "program": "Semana / orden de producción", "part": "Número de parte",
@@ -102,6 +112,13 @@ class ProductionOrderEditForm(forms.ModelForm):
         self.committed_quantity = (instance.quantity - instance.remaining_quantity
                                    if instance and instance.pk else Decimal("0"))
         super().__init__(*args, **kwargs)
+        available = Part.objects.filter(sample_base__isnull=True)
+        from .universe_api import central_catalog_enabled
+        if central_catalog_enabled():
+            available = available.filter(central_id__isnull=False, catalog_available=True)
+        if self.instance.pk:
+            available = Part.objects.filter(Q(pk__in=available.values('pk')) | Q(pk=self.instance.part_id))
+        self.fields['part'].queryset = available
 
     def clean_quantity(self):
         quantity = self.cleaned_data["quantity"]
@@ -144,7 +161,7 @@ class UniversePartForm(forms.ModelForm):
 
     def clean_number(self):
         number = self.cleaned_data["number"].strip()
-        existing = Part.objects.filter(number__iexact=number)
+        existing = Part.objects.filter(Q(number__iexact=number) | Q(legacy_number__iexact=number))
         if self.instance.pk:
             existing = existing.exclude(pk=self.instance.pk)
         if existing.exists():
@@ -186,6 +203,10 @@ class SurplusMovementForm(forms.Form):
     def __init__(self, *args, **kwargs):
         super().__init__(*args, **kwargs)
         self.fields["part"].queryset = Part.objects.order_by("number")
+        from .universe_api import central_catalog_enabled
+        if central_catalog_enabled():
+            self.fields['part'].queryset = self.fields['part'].queryset.filter(
+                sample_base__isnull=True, central_id__isnull=False, catalog_available=True)
 
     def clean(self):
         data = super().clean()
@@ -206,6 +227,10 @@ class ProcessMovementForm(forms.Form):
     def __init__(self, *args, **kwargs):
         super().__init__(*args, **kwargs)
         self.fields["part"].queryset = Part.objects.order_by("number")
+        from .universe_api import central_catalog_enabled
+        if central_catalog_enabled():
+            self.fields['part'].queryset = self.fields['part'].queryset.filter(
+                sample_base__isnull=True, central_id__isnull=False, catalog_available=True)
         processes = Process.objects.filter(active=True).order_by("position", "name")
         self.fields["source_process"].queryset = processes
         self.fields["destination_process"].queryset = processes

@@ -62,8 +62,20 @@ class MesaUserAdmin(UserAdmin):
 @admin.register(Part)
 class PartAdmin(admin.ModelAdmin):
     list_display = ("number", "client", "diameter", "unit_weight_kg")
-    search_fields = ("number", "description", "diameter")
+    search_fields = ("number", "diameter")
     list_filter = ("client",)
+
+    def has_add_permission(self, request):
+        from .universe_api import central_catalog_enabled
+        return not central_catalog_enabled() and super().has_add_permission(request)
+
+    def has_change_permission(self, request, obj=None):
+        from .universe_api import central_catalog_enabled
+        return not central_catalog_enabled() and super().has_change_permission(request, obj)
+
+    def has_delete_permission(self, request, obj=None):
+        from .universe_api import central_catalog_enabled
+        return not central_catalog_enabled() and super().has_delete_permission(request, obj)
 
 @admin.register(ProductionOrder)
 class ProductionOrderAdmin(admin.ModelAdmin):

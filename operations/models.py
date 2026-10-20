@@ -15,17 +15,26 @@ class TimeStamped(models.Model):
 
 class Client(TimeStamped):
     code = models.CharField(max_length=30, unique=True)
-    name = models.CharField(max_length=120)
+    name = models.CharField(max_length=150)
     external_id = models.CharField("ID cliente", max_length=30, blank=True, db_index=True)
     def __str__(self): return self.name
 
 
 class Part(TimeStamped):
-    number = models.CharField("número de parte", max_length=80, unique=True)
+    number = models.CharField("número de parte", max_length=120, unique=True)
+    legacy_number = models.CharField(max_length=80, blank=True, default='', editable=False, db_index=True)
+    # Historical aliases (including corrected numbers) retain their production FKs.
+    # An alias alone does not classify an order as a sample.
+    sample_base = models.ForeignKey('self', null=True, blank=True, on_delete=models.PROTECT,
+                                    related_name='legacy_sample_parts', editable=False)
+    central_id = models.UUIDField(null=True, blank=True, unique=True, editable=False)
+    central_payload = models.JSONField(default=dict, blank=True, editable=False)
+    local_catalog_snapshot = models.JSONField(default=dict, blank=True, editable=False)
+    catalog_available = models.BooleanField(default=True, db_index=True, editable=False)
     in_universe_ramos = models.BooleanField(default=False, db_index=True)
     universe_added_at = models.DateTimeField(null=True, blank=True, db_index=True)
     client = models.ForeignKey(Client, null=True, blank=True, on_delete=models.SET_NULL)
-    diameter = models.CharField(max_length=40, blank=True)
+    diameter = models.CharField(max_length=120, blank=True)
     unit_weight_kg = models.DecimalField(max_digits=14, decimal_places=6, null=True, blank=True,
         validators=[MinValueValidator(Decimal("0"))])
     class Meta:
@@ -37,6 +46,20 @@ class Part(TimeStamped):
         ]
 
     def __str__(self): return self.number
+
+
+class UniverseSyncState(models.Model):
+    """Singleton: enabled only after the first complete, atomic API import."""
+    id = models.PositiveSmallIntegerField(primary_key=True, default=1, editable=False)
+    enabled = models.BooleanField(default=False)
+    source_url = models.URLField(blank=True)
+    credential_fingerprint = models.CharField(max_length=64, blank=True)
+    cursor = models.TextField(blank=True)
+    policy_version = models.PositiveIntegerField(default=1)
+    include_samples = models.BooleanField(default=True)
+    last_success_at = models.DateTimeField(null=True, blank=True)
+    last_error = models.CharField(max_length=240, blank=True)
+    part_count = models.PositiveIntegerField(default=0)
 
 
 class Process(models.Model):
@@ -96,6 +119,15 @@ class ProductionOrder(TimeStamped):
     status = models.CharField(max_length=12, choices=Status.choices, default=Status.OPEN)
     loaded_by = models.ForeignKey(settings.AUTH_USER_MODEL, null=True, blank=True, on_delete=models.SET_NULL)
     legacy_id = models.CharField(max_length=80, blank=True, db_index=True)
+    is_sample = models.BooleanField("Muestra", default=False,
+        help_text="En órdenes nuevas, una muestra requiere 5 piezas. Editar esta marca conserva la cantidad existente.")
+
+    @property
+    def part_display(self):
+        number = self.part.sample_base.number if self.part.sample_base_id else self.part.number
+        if self.is_sample and '(MUESTRAS)' not in number.upper():
+            return f'{number} (MUESTRAS)'
+        return number
     def __str__(self): return self.folio
 
     class Meta:

@@ -18,10 +18,11 @@ services:
 
   web:
     build: .
+    image: ${HELIANG_IMAGE:-heliang-app:local}
     restart: unless-stopped
     ports:
       - "80:8000"
-    environment:
+    environment: &heliang-environment
       POSTGRES_DB: mesa
       POSTGRES_USER: mesa
       POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:?POSTGRES_PASSWORD es obligatoria}
@@ -32,6 +33,10 @@ services:
       DJANGO_CSRF_TRUSTED_ORIGINS: ${DJANGO_CSRF_TRUSTED_ORIGINS:-}
       DJANGO_SECURE_SSL: ${DJANGO_SECURE_SSL:-0}
       DJANGO_SECURE_HSTS_SECONDS: ${DJANGO_SECURE_HSTS_SECONDS:-0}
+      UR_BASE_URL: ${UR_BASE_URL:-https://universo.mesaramos.com}
+      UR_API_KEY: ${UR_API_KEY:-}
+      UR_WEIGHT_UNIT: ${UR_WEIGHT_UNIT:-}
+      UR_REQUEST_TIMEOUT_SECONDS: ${UR_REQUEST_TIMEOUT_SECONDS:-25}
     security_opt:
       - no-new-privileges:true
     cap_drop:
@@ -42,6 +47,32 @@ services:
       - database
     depends_on:
       db:
+        condition: service_healthy
+    healthcheck:
+      test: ["CMD", "python", "-c", "import socket; socket.create_connection(('127.0.0.1', 8000), timeout=3).close()"]
+      interval: 10s
+      timeout: 4s
+      retries: 5
+      start_period: 20s
+
+  universe-sync:
+    image: ${HELIANG_IMAGE:-heliang-app:local}
+    restart: unless-stopped
+    entrypoint: ["python", "manage.py", "sync_universe_ramos"]
+    command: ["--watch", "--interval", "300"]
+    environment: *heliang-environment
+    security_opt:
+      - no-new-privileges:true
+    cap_drop:
+      - ALL
+    pids_limit: 128
+    networks:
+      - default
+      - database
+    depends_on:
+      db:
+        condition: service_healthy
+      web:
         condition: service_healthy
 
 volumes:

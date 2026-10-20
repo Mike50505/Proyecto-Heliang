@@ -61,7 +61,7 @@
           <article class="{% if row.work %}running{% else %}idle{% endif %}">
             <div class="machine-head"><span class="state-dot"></span><div><b>{{ row.machine.code }}</b><small>{% if row.work %}PRODUCIENDO{% else %}DISPONIBLE{% endif %}</small></div></div>
             {% if row.work %}
-              <div class="machine-job"><span>{{ row.work.order.program }}</span><b>{{ row.work.order.part.number }}</b><small>{{ row.work.folio }} · {% if row.work.started_by %}{{ row.work.started_by.get_full_name|default:row.work.started_by.username }}{% else %}Sin operador{% endif %}</small></div>
+              <div class="machine-job"><span>{{ row.work.order.program }}</span><b>{{ row.work.order.part_display }}</b><small>{{ row.work.folio }} · {% if row.work.started_by %}{{ row.work.started_by.get_full_name|default:row.work.started_by.username }}{% else %}Sin operador{% endif %}</small></div>
               <div class="progress-meta"><span>Avance estimado</span><b>{{ row.progress }}%</b></div>
               <div class="progress"><i style="width:{{ row.progress }}%"></i></div>
               <div class="machine-qty"><span>Inicial <b>{{ row.work.initial_quantity|floatformat:"-2" }}</b></span><span>Restante <b>{{ row.work.remaining_quantity|floatformat:"-2" }}</b></span></div>
@@ -76,12 +76,12 @@
       <section class="screen-panel queue">
         <div class="panel-title"><h2>Próximos programas</h2><span>{{ open_count }} pendientes</span></div>
         <table><thead><tr><th>Programa</th><th>Parte</th><th>Cliente</th><th>Saldo</th><th>Entrega</th></tr></thead><tbody>
-          {% for row in open_orders %}<tr><td><b>{{ row.program }}</b><small>{{ row.folio }}</small></td><td>{{ row.part.number }}</td><td>{{ row.part.client.name|default:'—' }}</td><td><strong>{{ row.remaining_quantity|floatformat:"-2" }}</strong></td><td>{{ row.required_date|date:'d/m'|default:'—' }}</td></tr>{% empty %}<tr><td colspan="5">Sin programas pendientes</td></tr>{% endfor %}
+          {% for row in open_orders %}<tr><td><b>{{ row.program }}</b><small>{{ row.folio }}</small></td><td>{{ row.part_display }}</td><td>{{ row.part.client.name|default:'—' }}</td><td><strong>{{ row.remaining_quantity|floatformat:"-2" }}</strong></td><td>{{ row.required_date|date:'d/m'|default:'—' }}</td></tr>{% empty %}<tr><td colspan="5">Sin programas pendientes</td></tr>{% endfor %}
         </tbody></table>
       </section>
       <section class="screen-panel latest">
         <div class="panel-title"><h2>Últimos cierres</h2><span>hoy</span></div>
-        <div class="close-list">{% for row in recent_closes %}<article><time>{{ row.closed_at|date:'H:i' }}</time><div><b>{{ row.work_item.order.part.number }}</b><small>{{ row.work_item.order.program }} · {{ row.work_item.machine.code }}</small></div><strong>+{{ row.quantity|floatformat:"-2" }}</strong></article>{% empty %}<p>Sin cierres el día de hoy</p>{% endfor %}</div>
+        <div class="close-list">{% for row in recent_closes %}<article><time>{{ row.closed_at|date:'H:i' }}</time><div><b>{{ row.work_item.order.part_display }}</b><small>{{ row.work_item.order.program }} · {{ row.work_item.machine.code }}</small></div><strong>+{{ row.quantity|floatformat:"-2" }}</strong></article>{% empty %}<p>Sin cierres el día de hoy</p>{% endfor %}</div>
       </section>
     </div>
   </main>

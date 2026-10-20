@@ -16,6 +16,12 @@ def env_bool(name, default=False):
     raise ImproperlyConfigured(f"{name} debe ser 1/0 o true/false.")
 
 BASE_DIR = Path(__file__).resolve().parent.parent
+UR_BASE_URL = os.getenv("UR_BASE_URL", "https://universo.mesaramos.com").rstrip("/")
+UR_API_KEY = os.getenv("UR_API_KEY", "")
+UR_WEIGHT_UNIT = os.getenv("UR_WEIGHT_UNIT", "").strip().lower()
+if UR_WEIGHT_UNIT not in ('', 'kg', 'g'):
+    raise ImproperlyConfigured('UR_WEIGHT_UNIT debe ser kg, g o vacío hasta confirmar la unidad.')
+UR_REQUEST_TIMEOUT_SECONDS = int(os.getenv("UR_REQUEST_TIMEOUT_SECONDS", "25"))
 SECRET_KEY = os.getenv("DJANGO_SECRET_KEY", "dev-only-change-me")
 DEBUG = env_bool("DJANGO_DEBUG", default=True)
 ALLOWED_HOSTS = env_list("DJANGO_ALLOWED_HOSTS", "localhost,127.0.0.1")

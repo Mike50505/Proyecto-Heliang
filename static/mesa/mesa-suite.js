@@ -3,6 +3,9 @@
   const key = 'mesa-theme';
   const preference = matchMedia('(prefers-color-scheme: dark)');
   const apply = theme => {
+    const palette = document.documentElement.dataset.palette;
+    const themes = {classic:'light',pearl:'light',ivory:'light',sage:'light',slate:'dark',night:'dark'};
+    if (Object.hasOwn(themes, palette)) theme = themes[palette];
     document.documentElement.dataset.theme = theme;
     document.querySelectorAll('[data-mesa-theme]').forEach(button => {
       const dark = theme === 'dark';

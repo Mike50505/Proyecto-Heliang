@@ -3,7 +3,7 @@ from datetime import date, time
 from decimal import Decimal
 from django.core.exceptions import PermissionDenied, ValidationError
 from django.db import transaction
-from django.db.models import F, Sum
+from django.db.models import F, Q, Sum
 from django.utils import timezone
 from .formatting import diameter_category
 from .access import access_for
@@ -81,7 +81,7 @@ def _lock_open_order_capacity():
 
 @transaction.atomic
 def edit_production_order(*, order_id, program, part, quantity, required_date=None,
-                          line="", priority=None, user=None):
+                          line="", priority=None, user=None, is_sample=None):
     order = ProductionOrder.objects.select_for_update().get(pk=order_id)
     quantity = Decimal(quantity)
     _require_whole_quantity(quantity)
@@ -91,6 +91,9 @@ def edit_production_order(*, order_id, program, part, quantity, required_date=No
     has_production = order.work_items.exists()
     if has_production and part.pk != order.part_id:
         raise ValidationError("No se puede cambiar la pieza de una orden que ya tiene producción.")
+    from .universe_api import central_catalog_enabled
+    if part.pk != order.part_id and central_catalog_enabled() and (not part.central_id or not part.catalog_available):
+        raise ValidationError('Selecciona una pieza disponible en Universo Ramos.')
     if quantity < committed_quantity:
         raise ValidationError(
             f"La cantidad no puede ser menor que {committed_quantity:g}; "
@@ -103,6 +106,9 @@ def edit_production_order(*, order_id, program, part, quantity, required_date=No
         check_open_order_capacity(quantity=quantity, exclude_order_id=order.pk)
 
     previous_priority = order.priority
+    previous_sample = order.is_sample
+    if is_sample is not None:
+        order.is_sample = bool(is_sample)
     order.program = program.strip()
     order.part = part
     order.quantity = quantity
@@ -126,17 +132,29 @@ def edit_production_order(*, order_id, program, part, quantity, required_date=No
         user=user, action="EDIT_PROGRAM", entity="ProductionOrder",
         entity_id=order.folio,
         data={"program": order.program, "part": order.part.number,
-              "quantity": str(order.quantity)})
+              "quantity": str(order.quantity), "is_sample": order.is_sample,
+              "previous_is_sample": previous_sample})
     if previous_priority != priority:
         normalize_priorities()
     return order
 
 
+def program_part(part_number):
+    number = part_number.strip()
+    part = Part.objects.select_related('client', 'sample_base', 'sample_base__client').filter(Q(number=number) | Q(legacy_number=number)).first()
+    return part.sample_base if part and part.sample_base_id else part
+
+
 def resolve_program_client(*, client_reference, part_number):
     reference = client_reference.strip()
     part_number = part_number.strip()
-    part = Part.objects.select_related("client").filter(number=part_number).first()
+    part = program_part(part_number)
     mapped_client = part.client if part else None
+    from .universe_api import central_catalog_enabled
+    if central_catalog_enabled():
+        if not part or not part.central_id or not part.catalog_available:
+            raise ValidationError('El número de parte no está disponible en Universo Ramos. Sincroniza el catálogo.')
+        return mapped_client
 
     if reference and reference.upper() not in {"#N/A", "N/A", "NA"}:
         candidates = Client.objects.filter(external_id__iexact=reference)
@@ -159,14 +177,37 @@ def resolve_program_client(*, client_reference, part_number):
 
 @transaction.atomic
 def create_program_order(*, client_name, part_number, program, quantity, employee=None,
-                         required_date=None, line="", priority=None, comment="", user=None, client=None):
-    quantity = Decimal(quantity)
+                         required_date=None, line="", priority=None, comment="", user=None, client=None, is_sample=None):
+    requested_number = part_number.strip()
+    legacy_part = Part.objects.filter(Q(number=requested_number) | Q(legacy_number=requested_number)).first()
+    if legacy_part and legacy_part.sample_base_id:
+        part_number = legacy_part.sample_base.number
+        if is_sample is None:
+            is_sample = '(MUESTRAS)' in requested_number.upper()
+    elif legacy_part and legacy_part.legacy_number == requested_number:
+        part_number = legacy_part.number
+        if is_sample is None:
+            is_sample = '(MUESTRAS)' in requested_number.upper()
+    is_sample = bool(is_sample)
+    quantity = Decimal('5') if is_sample else Decimal(quantity)
     _require_whole_quantity(quantity)
     if quantity <= 0:
         raise ValidationError("La cantidad debe ser mayor que cero.")
     if priority is not None and int(priority) < 1:
         raise ValidationError("La prioridad debe ser un entero mayor que cero.")
     client_name = client_name.strip()
+    mapped_part = program_part(part_number)
+    from .universe_api import central_catalog_enabled
+    if central_catalog_enabled():
+        if not mapped_part or not mapped_part.central_id or not mapped_part.catalog_available:
+            raise ValidationError('El número de parte no está disponible en Universo Ramos. Sincroniza el catálogo.')
+        part_number = mapped_part.number
+        client = mapped_part.client
+        client_name = client.name
+    if client is None and mapped_part and mapped_part.client_id:
+        mapped = mapped_part.client
+        if client_name.casefold() in {mapped.name.casefold(), mapped.code.casefold(), mapped.external_id.casefold()}:
+            client = mapped
     if client is None:
         client_code = re.sub(r"[^A-Z0-9]+", "-", client_name.upper()).strip("-")[:30] or "SIN-CLIENTE"
         client, _ = Client.objects.get_or_create(code=client_code, defaults={"name": client_name})
@@ -184,6 +225,7 @@ def create_program_order(*, client_name, part_number, program, quantity, employe
         folio=next_folio(ProductionOrder, "O"), program=program.strip(), part=part,
         quantity=quantity, remaining_quantity=quantity, required_date=required_date,
         line=line.strip(), priority=priority, loaded_by=employee,
+        is_sample=is_sample,
     )
     Movement.objects.create(
         folio=order.folio, movement_type=Movement.Type.PROGRAM, part=part,
@@ -193,7 +235,7 @@ def create_program_order(*, client_name, part_number, program, quantity, employe
     AuditEvent.objects.create(user=user, action="LOAD_PROGRAM", entity="ProductionOrder",
                               entity_id=order.folio,
                               data={"program": order.program, "part": part.number,
-                                    "quantity": str(quantity)})
+                                    "quantity": str(quantity), "is_sample": order.is_sample})
     if priority is not None:
         normalize_priorities()
     return order
@@ -420,7 +462,10 @@ def close_production(*, work_item, quantity, employee=None, user=None, comment="
         raise ValidationError("La cantidad debe ser positiva y no superar el saldo en proceso.")
     local_time = timezone.localtime(when).time()
     shift = "Turno A" if SHIFT_A_START <= local_time < SHIFT_B_START else "Turno B"
-    unit_weight = work.order.part.unit_weight_kg or Decimal("0")
+    from .universe_api import central_catalog_enabled
+    current_part = (work.order.part.sample_base
+                    if work.order.part.sample_base_id and central_catalog_enabled() else work.order.part)
+    unit_weight = current_part.unit_weight_kg or Decimal("0")
     close = ProductionClose.objects.create(
         folio=next_folio(ProductionClose, "C", when), work_item=work, quantity=quantity,
         weight_kg=unit_weight * quantity, closed_at=when, shift=shift, comment=comment, closed_by=employee,

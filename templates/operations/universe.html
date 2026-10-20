@@ -5,18 +5,22 @@
   <div>
     <span class="eyebrow">CATÁLOGO MAESTRO</span>
     <h1>{% if show_all_parts %}Todos los números de parte{% else %}Universo Ramos Arizpe{% endif %}</h1>
-    <p>{% if show_all_parts %}Consulta todas las piezas registradas, incluidas las que están fuera del Universo Ramos.{% else %}Números de parte, clientes y diámetros disponibles.{% endif %}</p>
+    <p>{% if central_state %}Números de parte y datos actualizados desde la app Universo Ramos.{% elif show_all_parts %}Consulta todas las piezas registradas, incluidas las que están fuera del Universo Ramos.{% else %}Números de parte, clientes y diámetros disponibles.{% endif %}</p>
   </div>
   <div class="title-actions">
-    {% if show_all_parts %}
+    {% if central_state %}
+      <a class="button secondary" href="{{ central_url }}" target="_blank" rel="noopener noreferrer">Abrir Universo Ramos</a>
+      {% if module_access.universe_edit or module_access.universe_import %}<form method="post">{% csrf_token %}<input type="hidden" name="action" value="sync"><button type="submit">Sincronizar ahora</button></form>{% endif %}
+    {% elif show_all_parts %}
       <a class="button secondary" href="{% url 'universe' %}">Ver solo Universo Ramos ({{ ramos_total }})</a>
     {% else %}
       <a class="button secondary" href="{% url 'universe' %}?catalog=all">Ver todos los números ({{ catalog_total }})</a>
     {% endif %}
   </div>
 </div>
+{% if central_state %}<section class="panel"><p><strong>Catálogo conectado a Universo Ramos</strong> · Última sincronización: {{ central_state.last_success_at|date:'d/m/Y H:i' }}. Actualización automática cada 5 minutos.</p><p>Las altas y modificaciones se realizan en Universo Ramos. Las órdenes y su historial se conservan en Heiliang.</p>{% if not central_weight_unit %}<p>El cálculo de producción conserva el peso local en kg hasta confirmar la unidad del peso de Universo Ramos.</p>{% endif %}{% if central_state.last_error %}<p role="alert">{{ central_state.last_error }}</p>{% endif %}</section>{% endif %}
 <section class="universe-stats"><article><strong>{{ universe_total }}</strong><span>{% if show_all_parts %}Piezas registradas{% else %}Piezas en Universo Ramos{% endif %}</span></article><article><strong>{{ universe_diameter_count }}</strong><span>Diámetros</span></article><article><strong>{{ universe_client_count }}</strong><span>Clientes</span></article></section>
-{% if module_access.universe_edit or module_access.universe_import %}
+{% if not central_state %}{% if module_access.universe_edit or module_access.universe_import %}
 <details class="management-tools" {% if part_form.errors or import_form.errors or new_parts_form.errors %}open{% endif %}>
 <summary>Gestionar catálogo <small>Agregar piezas o importar desde Excel</small></summary>
 <div class="universe-layout">
@@ -34,7 +38,7 @@
   </section>
   {% endif %}
   {% if module_access.universe_import %}<section class="form-card no-margin"><h2>Actualizar desde Excel</h2><p>Carga el catálogo de Copia de UNIVERSO RAMOS.XLSX. Se usan número de parte, cliente y diámetro de la hoja Sheet1 (2); las piezas existentes se actualizan por número.</p><form method="post" enctype="multipart/form-data">{% csrf_token %}<input type="hidden" name="action" value="import">{{ import_form.as_p }}<div class="form-actions"><button type="submit">Importar universo</button></div></form></section>{% endif %}
-</div></details>{% endif %}
+</div></details>{% endif %}{% endif %}
 <form class="filters panel" method="get">
   {% if show_all_parts %}<input type="hidden" name="catalog" value="all">{% endif %}
   <label class="grow">Buscar<input type="search" name="q" value="{{ query }}" placeholder="Número, cliente o diámetro"></label>
@@ -46,8 +50,8 @@
   <a class="button secondary" href="{% url 'universe' %}{% if show_all_parts %}?catalog=all{% endif %}">Limpiar</a>
 </form>
 <section class="panel table-wrap"><table>
-  <thead><tr><th>N.º de parte</th><th>Cliente</th><th>Diámetro</th><th>Peso unitario</th><th>Fecha de subida</th>{% if show_all_parts %}<th>En Universo Ramos</th>{% endif %}{% if module_access.universe_edit %}<th>Acciones</th>{% endif %}</tr></thead>
-  <tbody>{% for part in parts %}<tr><td><b>{{ part.number }}</b></td><td>{{ part.client.name|default:'—' }}</td><td>{{ part.diameter|default:'—' }}</td><td>{{ part.unit_weight_kg|default_if_none:'—' }}</td><td>{{ part.universe_added_at|date:'Y-m-d'|default:'—' }}</td>{% if show_all_parts %}<td>{% if part.in_universe_ramos %}Sí{% else %}No{% endif %}</td>{% endif %}{% if module_access.universe_edit %}<td><a class="button secondary" aria-label="Editar pieza {{ part.number }}" href="{% url 'edit-universe-part' part.pk %}{% if query_string %}?{{ query_string }}{% endif %}">Editar</a></td>{% endif %}</tr>{% empty %}<tr><td colspan="{% if show_all_parts %}{% if module_access.universe_edit %}7{% else %}6{% endif %}{% else %}{% if module_access.universe_edit %}6{% else %}5{% endif %}{% endif %}">No hay piezas que coincidan.</td></tr>{% endfor %}</tbody>
+  <thead><tr><th>N.º de parte</th><th>Cliente</th><th>Diámetro</th><th>{% if central_state %}Peso (Universo Ramos){% else %}Peso unitario{% endif %}</th><th>Fecha de subida</th>{% if show_all_parts %}<th>En Universo Ramos</th>{% endif %}{% if not central_state and module_access.universe_edit %}<th>Acciones</th>{% endif %}</tr></thead>
+  <tbody>{% for part in parts %}<tr><td><b>{{ part.number }}</b>{% if central_state and part.central_payload.is_sample %} <small>(PENDIENTE DE APROBACIÓN)</small>{% endif %}</td><td>{{ part.client.name|default:'—' }}</td><td>{{ part.diameter|default:'—' }}</td><td>{% if central_state %}{{ part.central_payload.weight|default_if_none:'—' }}{% else %}{{ part.unit_weight_kg|default_if_none:'—' }}{% endif %}</td><td>{{ part.universe_added_at|date:'Y-m-d'|default:'—' }}</td>{% if show_all_parts %}<td>{% if part.in_universe_ramos %}Sí{% else %}No{% endif %}</td>{% endif %}{% if not central_state and module_access.universe_edit %}<td><a class="button secondary" aria-label="Editar pieza {{ part.number }}" href="{% url 'edit-universe-part' part.pk %}{% if query_string %}?{{ query_string }}{% endif %}">Editar</a></td>{% endif %}</tr>{% empty %}<tr><td colspan="{% if central_state %}5{% elif show_all_parts %}{% if module_access.universe_edit %}7{% else %}6{% endif %}{% else %}{% if module_access.universe_edit %}6{% else %}5{% endif %}{% endif %}">No hay piezas que coincidan.</td></tr>{% endfor %}</tbody>
 </table></section>
 
 

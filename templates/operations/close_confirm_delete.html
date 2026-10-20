@@ -4,7 +4,7 @@
 <section class="form-card">
   <span class="eyebrow">CORREGIR PRODUCCIÓN</span>
   <h1>Eliminar cierre {{ close.folio }}</h1>
-  <p>Orden <b>{{ close.work_item.order.folio }}</b> · {{ close.work_item.order.program }} · {{ close.work_item.order.part.number }}</p>
+  <p>Orden <b>{{ close.work_item.order.folio }}</b> · {{ close.work_item.order.program }} · {{ close.work_item.order.part_display }}</p>
   <p>{{ close.quantity|floatformat:"-3" }} piezas · {{ close.weight_kg|floatformat:4 }} kg · {{ close.work_item.machine.code }}</p>
   <div class="delete-warning">El cierre dejará de aparecer en los reportes y las gráficas. Se devolverán {{ close.quantity|floatformat:"-3" }} piezas {% if return_to_work %}al proceso activo{% else %}a la orden para volver a asignarlas. La máquina no se reactivará{% endif %}. El motivo y tu usuario quedarán registrados en la auditoría.</div>
   <form method="post">

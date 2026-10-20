@@ -1,5 +1,6 @@
 import csv
 import re
+from django.conf import settings
 from itertools import islice
 from fractions import Fraction
 from uuid import uuid4
@@ -30,7 +31,9 @@ from .forms import (BulkProgramForm, CloseProductionForm, DeleteProductionCloseF
 from .formatting import (diameter_category, diameter_category_sort_key,
                          format_diameter_fraction)
 from .models import (AuditEvent, Client, Inventory, InventoryBucket, Machine, Movement, Part, Process,
-                     ProductionClose, ProductionOrder, WorkInProcess, ProgramImportPreview)
+                     ProductionClose, ProductionOrder, WorkInProcess, ProgramImportPreview, UniverseSyncState)
+from .universe_api import (UniverseAPIError, central_catalog_enabled, require_local_catalog,
+                           synchronize_universe)
 from .security import MAX_XLSX_ROWS, spreadsheet_safe, validate_xlsx_archive
 from .universe_upload import HEADERS as NEW_PART_HEADERS, import_new_universe_parts
 from .services import (open_order_total, check_open_order_capacity,
@@ -53,13 +56,15 @@ def dashboard(request):
 
 def _orders_matching_list_filters(request, limit=500):
     """Return orders in the same order as the list, with its active filters."""
-    orders = ProductionOrder.objects.select_related("part", "part__client")
+    orders = ProductionOrder.objects.select_related("part", "part__client", "part__sample_base")
     query = request.GET.get("q", "").strip()
     status = request.GET.get("status", "").strip()
     client_filter = request.GET.get("client", "").strip()
     start = _valid_date(request.GET.get("start"))
     end = _valid_date(request.GET.get("end"))
     priority_only = request.GET.get("priority") == "1"
+    if request.GET.get("is_sample") in ("true", "false"):
+        orders = orders.filter(is_sample=request.GET["is_sample"] == "true")
     if query:
         orders = orders.filter(
             Q(folio__icontains=query) | Q(program__icontains=query) |
@@ -109,7 +114,7 @@ def _orders_matching_list_filters(request, limit=500):
         visible_orders = list(ordered[:limit] if limit is not None else ordered)
     return visible_orders, {
         "query": query, "status": status, "client_filter": client_filter,
-        "priority_only": priority_only,
+        "priority_only": priority_only, "sample_filter": request.GET.get("is_sample", ""),
         "start": start.isoformat() if start else "",
         "end": end.isoformat() if end else "",
     }
@@ -153,7 +158,7 @@ def download_filtered_orders(request):
             order.diameter_priority if priority_only else order.priority,
             spreadsheet_safe(order.program),
             spreadsheet_safe(order.part.client.name if order.part.client else ""),
-            spreadsheet_safe(order.part.number),
+            spreadsheet_safe(order.part_display),
         ]
         if priority_only:
             values.append(spreadsheet_safe(order.diameter_group))
@@ -314,7 +319,7 @@ def load_program(request):
                 client_name=form.cleaned_data["client"], part_number=form.cleaned_data["part_number"],
                 program=form.cleaned_data["program"], quantity=form.cleaned_data["quantity"],
                 required_date=form.cleaned_data["required_date"], line=form.cleaned_data["line"],
-                priority=form.cleaned_data["priority"],
+                priority=form.cleaned_data["priority"], is_sample=form.cleaned_data['is_sample'],
                 comment=form.cleaned_data["comment"], employee=employee, user=request.user)
         except ValidationError as exc:
             form.add_error(None, exc)
@@ -411,7 +416,7 @@ def download_program_template(request):
 def download_completed_programs(request):
     orders = ProductionOrder.objects.filter(
         status=ProductionOrder.Status.COMPLETE
-    ).select_related("part", "part__client").annotate(
+    ).select_related("part", "part__client", "part__sample_base").annotate(
         completed_quantity=Sum("work_items__closes__quantity"),
         last_close=Max("work_items__closes__closed_at"),
     ).order_by("program", "part__client__name", "part__number")[:10000]
@@ -443,7 +448,7 @@ def download_completed_programs(request):
             spreadsheet_safe(order.program), spreadsheet_safe(order.folio),
             spreadsheet_safe(client.external_id if client else ""),
             spreadsheet_safe(client.name if client else ""),
-            spreadsheet_safe(order.part.number), order.quantity,
+            spreadsheet_safe(order.part_display), order.quantity,
             completed, order.remaining_quantity, order.required_date, order.line,
             order.get_status_display(), last_close,
         ])
@@ -516,6 +521,7 @@ def bulk_load_program(request):
                         quantity=Decimal(row["quantity"]), line=row["line"],
                         required_date=date.fromisoformat(row["required_date"]) if row["required_date"] else None,
                         priority=priority,
+                        is_sample=request.POST.get(f"sample_{row['row_number']}") == 'on',
                         employee=request.user, user=request.user,
                         comment=f"Carga masiva: {payload['filename']}")
                     added += 1
@@ -581,14 +587,20 @@ def bulk_load_program(request):
                 item = {"row_number": row_number, "reference": client, "program": program,
                         "line": line, "required_date": required.isoformat() if required else "",
                         "part_number": part_number, "quantity": str(quantity), "priority": ""}
+                legacy_part = Part.objects.filter(Q(number=part_number) | Q(legacy_number=part_number)).select_related('sample_base').first()
+                item['is_sample'] = bool(legacy_part and '(MUESTRAS)' in part_number.upper()
+                                         and (legacy_part.sample_base_id or legacy_part.legacy_number == part_number))
+                item['display_number'] = (legacy_part.sample_base.number if legacy_part.sample_base_id else legacy_part.number) if legacy_part else part_number
+                item['has_sample_label'] = '(MUESTRAS)' in item['display_number'].upper()
+                item['effective_quantity'] = '5' if item['is_sample'] else str(quantity)
                 try:
                     resolved_client = resolve_program_client(client_reference=client, part_number=part_number)
                     item["client_id"] = resolved_client.pk
                     item["client_name"] = resolved_client.name
                     check_open_order_capacity(
-                        quantity=quantity, current_total=current_total,
+                        quantity=Decimal(item['effective_quantity']), current_total=current_total,
                         pending=pending_total)
-                    pending_total += quantity
+                    pending_total += Decimal(item['effective_quantity'])
                     item["status"] = "Agregar como orden nueva"
                     added += 1
                     payload_rows.append(item.copy())
@@ -692,6 +704,21 @@ def download_universe_new_parts_template(request):
 @login_required
 @module_required("universe")
 def universe(request):
+    central_state = UniverseSyncState.objects.filter(pk=1, enabled=True).first()
+    if central_state and request.method == 'POST':
+        access = access_for(request.user)
+        if request.POST.get('action') == 'sync' and (access.universe_edit or access.universe_import):
+            try:
+                result = synchronize_universe(user=request.user)
+            except (UniverseAPIError, KeyError, TypeError, ValueError) as exc:
+                message = str(exc) if isinstance(exc, UniverseAPIError) else 'Respuesta inválida de Universo Ramos. Se conserva el catálogo anterior.'
+                UniverseSyncState.objects.filter(pk=1).update(last_error=message[:240])
+                messages.error(request, message)
+            else:
+                messages.success(request, f"Universo Ramos sincronizado: {result['available']} piezas disponibles.")
+        else:
+            messages.error(request, 'El catálogo se administra en Universo Ramos. Los cambios locales están deshabilitados.')
+        return redirect('universe')
     if request.method == "POST" and request.POST.get("action") == "edit":
         try:
             part_id = int(request.POST.get("part_id", ""))
@@ -738,12 +765,15 @@ def universe(request):
         else:
             messages.success(request, f"Se agregaron {added} piezas nuevas al Universo Ramos.")
             return redirect("universe")
-    show_all_parts = request.GET.get("catalog") == "all"
+    show_all_parts = request.GET.get("catalog") == "all" and not central_state
     query = request.GET.get("q", "").strip()
     diameter_filter = request.GET.get("diameter", "").strip()
     client_filter = request.GET.get("client", "").strip()
     uploaded_on = _valid_date(request.GET.get("uploaded_on", ""))
-    all_parts = Part.objects.all() if show_all_parts else Part.objects.filter(in_universe_ramos=True)
+    visible_parts = Part.objects.filter(sample_base__isnull=True)
+    if central_state:
+        visible_parts = visible_parts.filter(central_id__isnull=False, catalog_available=True)
+    all_parts = visible_parts if show_all_parts else visible_parts.filter(in_universe_ramos=True)
     parts = all_parts.select_related("client").order_by(
         F("universe_added_at").asc(nulls_last=True), "id")
     if query:
@@ -759,14 +789,16 @@ def universe(request):
     diameters = sorted({diameter_category(part.diameter) for part in catalog_parts if part.diameter}, key=diameter_category_sort_key)
     clients = sorted({part.client.name for part in catalog_parts if part.client}, key=str.casefold)
     return render(request, "operations/universe.html", {
+        "central_state": central_state, "central_url": settings.UR_BASE_URL,
+        "central_weight_unit": settings.UR_WEIGHT_UNIT,
         "part_form": part_form, "import_form": import_form,
         "new_parts_form": new_parts_form, "parts": parts, "query": query,
         "diameter_filter": diameter_filter, "client_filter": client_filter,
         "uploaded_on": uploaded_on.isoformat() if uploaded_on else "",
         "diameters": diameters, "clients": clients,
         "show_all_parts": show_all_parts,
-        "catalog_total": Part.objects.count(),
-        "ramos_total": Part.objects.filter(in_universe_ramos=True).count(),
+        "catalog_total": visible_parts.count(),
+        "ramos_total": visible_parts.filter(in_universe_ramos=True).count(),
         "universe_total": len(catalog_parts), "universe_diameter_count": len(diameters),
         "universe_client_count": len(clients),
         "query_string": request.GET.urlencode(),
@@ -777,6 +809,9 @@ def universe(request):
 @module_required("universe")
 @module_required("universe_edit")
 def edit_universe_part(request, pk):
+    if central_catalog_enabled():
+        messages.error(request, 'Edita esta pieza en Universo Ramos y sincroniza el catálogo.')
+        return redirect('universe')
     def snapshot(part):
         return {"number": part.number, "client_id": part.client_id,
                 "diameter": part.diameter,
@@ -822,6 +857,7 @@ def _universe_key(value):
 
 @transaction.atomic
 def _import_universe_workbook(upload):
+    require_local_catalog()
     validate_xlsx_archive(upload)
     workbook = load_workbook(upload, data_only=True, read_only=True)
     sheet = workbook["Sheet1 (2)"] if "Sheet1 (2)" in workbook.sheetnames else workbook.active
@@ -1060,7 +1096,7 @@ def heliang(request):
     order_client_filter = request.GET.get("order_client", "").strip()
     work_client_filter = request.GET.get("work_client", "").strip()
     open_orders_query = ProductionOrder.objects.filter(status=ProductionOrder.Status.OPEN).select_related(
-        "part", "part__client").annotate(
+        "part", "part__client", "part__sample_base").annotate(
             priority_sort=Case(When(priority__isnull=True, then=Value(2147483647)),
                                default="priority", output_field=IntegerField())
         ).order_by("priority_sort", "required_date", "created_at")
@@ -1148,7 +1184,7 @@ def _line_dashboard_context():
     today_closes = ProductionClose.objects.filter(closed_at__date=today)
     today_summary = today_closes.aggregate(quantity=Sum("quantity"))
     open_orders = ProductionOrder.objects.filter(status=ProductionOrder.Status.OPEN).select_related(
-        "part", "part__client").order_by("required_date", "created_at")[:8]
+        "part", "part__client", "part__sample_base").order_by("required_date", "created_at")[:8]
     recent_closes = ProductionClose.objects.filter(closed_at__date=today).select_related(
         "work_item__order__part", "work_item__machine").order_by("-closed_at")[:8]
     total_machines = len(machine_rows)
@@ -1219,7 +1255,7 @@ def progress_dashboard(request):
 def _progress_dashboard_data():
     orders = ProductionOrder.objects.exclude(
         status=ProductionOrder.Status.CANCELLED
-    ).select_related("part", "part__client").annotate(
+    ).select_related("part", "part__client", "part__sample_base").annotate(
         completed_quantity=Sum("work_items__closes__quantity")
     ).order_by("program", "part__client__name", "part__number")[:5000]
 
@@ -1230,7 +1266,7 @@ def _progress_dashboard_data():
             "folio": order.folio,
             "week": order.program or "Sin semana",
             "client": order.part.client.name if order.part.client else "Sin cliente",
-            "part": order.part.number,
+            "part": order.part_display,
             "programmed": float(order.quantity),
             "completed": float(completed),
         })
@@ -1284,7 +1320,7 @@ def close_work(request):
 @module_required("inventory")
 def inventory_list(request):
     query = request.GET.get("q", "").strip()
-    rows = Inventory.objects.select_related("part", "part__client").prefetch_related("buckets")
+    rows = Inventory.objects.select_related("part", "part__client", "part__sample_base").prefetch_related("buckets")
     if query: rows = rows.filter(part__number__icontains=query)
     return render(request, "operations/inventory_list.html", {"rows": rows[:300], "query": query})
 
@@ -1369,7 +1405,7 @@ def report_csv(request):
     writer.writerow(["Folio", "Orden", "Programa", "Número de parte", "Cantidad", "Máquina", "Cierre", "Turno", "Kilogramos", "Operador", "Comentario"])
     for row in rows[:10000]:
         writer.writerow([spreadsheet_safe(row.folio), spreadsheet_safe(row.work_item.order.folio),
-            spreadsheet_safe(row.work_item.order.program), spreadsheet_safe(row.work_item.order.part.number),
+            spreadsheet_safe(row.work_item.order.program), spreadsheet_safe(row.work_item.order.part_display),
             format(row.quantity.normalize(), "f"), spreadsheet_safe(row.work_item.machine.code), row.closed_at,
             spreadsheet_safe(row.shift), f"{row.weight_kg:.2f}",
             spreadsheet_safe(row.closed_by or ""), spreadsheet_safe(row.comment)])

@@ -1,0 +1,107 @@
+GUÍA GENERAL DE LA APLICACIÓN MESA
+===================================
+
+¿PARA QUÉ SIRVE?
+
+MESA ayuda a organizar y dar seguimiento al trabajo de producción. Reúne los números de parte, las órdenes de los clientes, las prioridades, el trabajo asignado a las máquinas, el material disponible y los resultados de producción.
+
+La idea es que una orden pueda seguirse desde que se carga hasta que se produce y se consulta en los reportes. Cada persona ve las opciones para las que tiene acceso.
+
+
+PANTALLAS DE LA APLICACIÓN
+--------------------------
+
+1. Inicio
+
+Es la entrada principal. Muestra accesos a los módulos y un resumen de la operación: órdenes abiertas, trabajos en proceso, cierres recientes y piezas registradas. Sirve para ubicarse rápidamente y entrar a la tarea del día.
+
+2. Universo Ramos Arizpe
+
+Es el catálogo de números de parte. Permite consultar la pieza, su cliente, diámetro, peso unitario y fecha de carga. Se puede buscar y filtrar, ver los registros del Universo Ramos o abrir la vista con todos los números de parte disponibles en la aplicación.
+
+El personal con permiso puede agregar piezas una por una o subir nuevas piezas mediante una plantilla de Excel. La aplicación evita que se registre dos veces el mismo número de parte. También existe una opción para actualizar el Universo Ramos desde su archivo de Excel correspondiente. Conviene revisar aquí una pieza antes de cargar una orden si hay dudas sobre su número o sus datos.
+
+3. Cargar programa
+
+Aquí se registran nuevas órdenes de producción. Una orden puede capturarse a mano con cliente, número de parte, programa o semana, cantidad, fecha de entrega, línea y prioridad.
+
+Cuando son varias órdenes, se descarga una plantilla de Excel, se llena y se sube. Antes de confirmar la carga aparece una vista previa para revisar los datos y ajustar prioridades. Si hay errores en el archivo, se muestran para corregirlos antes de guardar las órdenes.
+
+4. Programas y órdenes
+
+Es la lista de órdenes registradas. Permite buscar por folio, programa, cliente o número de parte, y filtrar por estado, fechas y prioridades. En cada fila se ve la cantidad solicitada, lo que falta por producir, la fecha requerida y el estado.
+
+Al activar “Solo prioridades”, las órdenes prioritarias se agrupan visualmente por diámetro. Cada grupo muestra su conteo y el orden de prioridad de sus piezas; ese orden puede ajustarse desde la misma vista. También se pueden editar órdenes.
+
+Hay dos descargas útiles: “Descargar órdenes filtradas” genera un Excel con las órdenes que coinciden con los filtros activos; si no hay filtros, incluye todas. “Descargar completados” exporta las órdenes terminadas.
+
+5. Heliang
+
+Es la pantalla para organizar el trabajo de las máquinas Heliang. Muestra órdenes disponibles, prioridades por diámetro, números de parte que ya están en proceso y cierres recientes.
+
+Desde aquí se elige una orden, la máquina y la cantidad que se va a trabajar. Al comenzar, el trabajo queda en proceso. Al terminar, se registra el cierre con la cantidad producida y los datos del turno u operador. Si una orden aún tiene cantidad pendiente, puede seguir trabajándose después.
+
+6. Producción
+
+Muestra los trabajos que se asignaron a máquinas y su estado. Sirve para revisar qué está en marcha, iniciar un trabajo cuando corresponda y registrar su cierre. Es una vista de seguimiento del trabajo de producción.
+
+7. Procesos y máquinas
+
+Permite consultar los procesos y las máquinas de la operación. Ayuda a ubicar dónde se realiza cada etapa y da acceso al envío de trabajo a producción.
+
+8. Inventario
+
+Permite consultar las piezas y el material disponible. Se puede buscar un número de parte y revisar existencias, peso unitario, sobrantes y cantidades asociadas a programas o procesos. Es la referencia para saber con qué material se cuenta antes de moverlo o utilizarlo.
+
+9. Material sobrante
+
+Se usa para registrar material que quedó disponible y para asignarlo a un programa cuando se vaya a aprovechar. La pantalla muestra los movimientos recientes, de modo que se pueda seguir de dónde salió y a dónde se destinó ese material.
+
+10. Material en proceso
+
+Muestra el material que se encuentra en distintas etapas de trabajo. Se selecciona una pieza para consultar sus saldos y registrar transferencias de un proceso a otro. También se pueden revisar los movimientos recientes.
+
+11. Tablero de línea
+
+Es una vista visual para dar seguimiento a la operación durante el día. Resume producción reciente, uso de máquinas, estado de las órdenes, material por proceso y últimos cierres. Puede dejarse abierta como tablero de consulta y se actualiza automáticamente.
+
+12. Avance de producción
+
+Presenta gráficas para comparar lo programado con lo producido. Se puede explorar el avance por semana y cliente, seleccionar elementos de la gráfica y revisar el detalle de las órdenes relacionadas. Es útil para detectar pendientes y ver cómo marcha un programa.
+
+13. Reportes
+
+El reporte de producción reúne los cierres registrados, incluidas producciones parciales. Permite filtrar por texto, máquina, turno y fechas. Muestra datos como orden, pieza, cantidad, máquina, horario, kilos y operador. El resultado filtrado se puede descargar en CSV para trabajarlo fuera de la aplicación.
+
+14. Administración
+
+Esta opción aparece para usuarios autorizados. Se utiliza para tareas de gestión de la aplicación, como mantener datos y accesos.
+
+
+FLUJO HABITUAL DE TRABAJO
+-------------------------
+
+1. Consultar el número de parte en Universo Ramos Arizpe. Si es una pieza nueva y se tiene permiso, registrarla allí.
+2. Capturar la orden en Cargar programa, de forma individual o con la plantilla de Excel.
+3. Revisar la orden en Programas y órdenes. Corregir datos si hace falta y definir o ajustar prioridades.
+4. Seleccionar el trabajo en Heliang o Producción, asignar máquina y cantidad, e iniciar la producción.
+5. Dar seguimiento en las pantallas de producción, el Tablero de línea y Avance de producción.
+6. Registrar el cierre al terminar el trabajo. Si queda cantidad pendiente en la orden, continuarla posteriormente.
+7. Consultar existencias y registrar sobrantes o movimientos de material cuando corresponda.
+8. Revisar los resultados en Reportes y descargar los datos necesarios.
+
+
+TÉRMINOS ÚTILES
+---------------
+
+Número de parte: clave que identifica una pieza. No se repite dentro del catálogo.
+Programa o semana: periodo con el que se organiza la orden.
+Prioridad: orden en el que se desea atender un trabajo.
+Pendiente: cantidad de la orden que todavía falta producir.
+Cierre: registro de lo que se terminó de producir.
+
+
+LO BÁSICO DE SU FUNCIONAMIENTO
+------------------------------
+
+La aplicación se abre en un navegador y requiere iniciar sesión. Guarda las órdenes, piezas, movimientos y cierres para que puedan consultarse después. Algunas pantallas permiten importar o descargar información en Excel; los reportes de producción se pueden descargar en CSV. Las opciones visibles dependen de los permisos de cada usuario.

@@ -23,6 +23,8 @@ def cell_text(value):
 
 @transaction.atomic
 def import_new_universe_parts(upload):
+    from .universe_api import require_local_catalog
+    require_local_catalog()
     validate_xlsx_archive(upload)
     workbook = load_workbook(upload, data_only=True, read_only=True)
     try:
@@ -76,6 +78,8 @@ def import_new_universe_parts(upload):
             Part.objects.annotate(number_lower=Lower("number"))
             .filter(number_lower__in=seen).values_list("number_lower", flat=True)
         )
+        existing.update(Part.objects.annotate(legacy_lower=Lower('legacy_number'))
+                        .filter(legacy_lower__in=seen).values_list('legacy_lower', flat=True))
         for row_number, number, *_ in rows:
             if number.lower() in existing:
                 errors.append(f"Fila {row_number}: el número {number} ya está registrado.")

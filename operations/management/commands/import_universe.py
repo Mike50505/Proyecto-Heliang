@@ -41,6 +41,8 @@ class Command(BaseCommand):
 
     @transaction.atomic
     def handle(self, *args, **options):
+        from operations.universe_api import require_local_catalog
+        require_local_catalog()
         source = options["workbook"]
         if not source.exists():
             raise CommandError(f"No existe {source}")
