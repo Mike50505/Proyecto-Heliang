@@ -3,10 +3,11 @@ from decimal import Decimal
 from django.contrib.auth import get_user_model
 from django.core.exceptions import ValidationError
 from django.db import IntegrityError, transaction
+from django.test import override_settings
 from django.utils import timezone
 from datetime import datetime
 from operations.models import (Client, Machine, Part, ProductionClose,
-                               ProductionOrder, WorkInProcess)
+                               ProductionOrder, UniverseSyncState, WorkInProcess)
 from operations.services import (close_production, edit_production_order,
                                  next_folio, release_production, start_production)
 
@@ -34,6 +35,34 @@ def test_start_and_partial_close_preserve_balances(data):
     assert order.remaining_quantity == 85
     assert order.status == ProductionOrder.Status.OPEN
     assert close.weight_kg == Decimal("3.750")
+
+
+@pytest.mark.django_db
+@override_settings(UR_WEIGHT_UNIT='')
+def test_central_weight_without_unit_blocks_close_instead_of_using_local_or_zero_weight(data):
+    order, machine, employee = data
+    order.part.central_payload = {'weight': '125', 'weight_unit': ''}
+    order.part.save(update_fields=['central_payload'])
+    UniverseSyncState.objects.create(enabled=True)
+    work = start_production(order=order, machine=machine, quantity=4, employee=employee)
+    with pytest.raises(ValidationError, match='confirma su unidad'):
+        close_production(work_item=work, quantity=4, employee=employee)
+    assert not ProductionClose.objects.filter(work_item=work).exists()
+    work.refresh_from_db()
+    assert work.status == WorkInProcess.Status.ACTIVE
+
+
+@pytest.mark.django_db
+@override_settings(UR_WEIGHT_UNIT='')
+def test_confirmed_central_grams_are_closed_in_kilograms(data):
+    order, machine, employee = data
+    order.part.central_payload = {'weight': '125', 'weight_unit': 'g'}
+    order.part.unit_weight_kg = Decimal('0.125')
+    order.part.save(update_fields=['central_payload', 'unit_weight_kg'])
+    UniverseSyncState.objects.create(enabled=True)
+    work = start_production(order=order, machine=machine, quantity=4, employee=employee)
+    close = close_production(work_item=work, quantity=4, employee=employee)
+    assert close.weight_kg == Decimal('0.500')
 
 
 @pytest.mark.django_db

@@ -10,9 +10,9 @@ from django.urls import reverse
 from django.utils import timezone
 
 from operations.forms import ProductionOrderEditForm, SurplusMovementForm, ProcessMovementForm
-from operations.models import (Client, Part, ProductionOrder, Movement, Inventory,
+from operations.models import (Client, Machine, Part, ProductionOrder, Movement, Inventory,
                                InventoryBucket, WorkInProcess, ProductionClose, UniverseSyncState)
-from operations.services import create_program_order, resolve_program_client
+from operations.services import close_production, create_program_order, resolve_program_client, start_production
 from operations.universe_api import UniverseAPI, UniverseAPIError, ResyncRequired, synchronize_universe
 
 
@@ -251,3 +251,55 @@ class UniverseAPITests(TestCase):
         self.sync()
         self.part.refresh_from_db()
         self.assertEqual(self.part.unit_weight_kg, Decimal('0.125000'))
+
+    @override_settings(UR_WEIGHT_UNIT='kg')
+    def test_piece_unit_from_universo_overrides_the_legacy_global_unit(self):
+        self.row.update(weight='125', weight_unit='g')
+        self.sync()
+        self.part.refresh_from_db()
+        self.assertEqual(self.part.unit_weight_kg, Decimal('0.125000'))
+        self.assertEqual(self.part.central_payload['weight_unit'], 'g')
+
+    @override_settings(UR_WEIGHT_UNIT='g')
+    def test_piece_in_kilograms_is_not_converted_by_the_legacy_global_unit(self):
+        self.row.update(weight='0.125', weight_unit='kg')
+        self.sync()
+        self.part.refresh_from_db()
+        self.assertEqual(self.part.unit_weight_kg, Decimal('0.125'))
+
+    @override_settings(UR_WEIGHT_UNIT='')
+    def test_closing_requires_central_weight_and_per_piece_unit(self):
+        self.part.central_payload = {'weight': '125', 'weight_unit': ''}
+        self.part.save(update_fields=['central_payload'])
+        UniverseSyncState.objects.create(enabled=True)
+        order = ProductionOrder.objects.create(folio='WEIGHT-ORDER', program='S1', part=self.part,
+                                               quantity=4, remaining_quantity=4)
+        work = start_production(order=order, machine=Machine.objects.create(code='WEIGHT-MACHINE'), quantity=4)
+        with self.assertRaisesMessage(ValidationError, 'confirma su unidad'):
+            close_production(work_item=work, quantity=4)
+        self.assertFalse(ProductionClose.objects.filter(work_item=work).exists())
+        work.refresh_from_db()
+        self.assertEqual(work.status, WorkInProcess.Status.ACTIVE)
+
+    @override_settings(UR_WEIGHT_UNIT='')
+    def test_old_api_without_unit_field_keeps_existing_closures_working(self):
+        self.part.central_payload = {'weight': '0.300000'}
+        self.part.save(update_fields=['central_payload'])
+        UniverseSyncState.objects.create(enabled=True)
+        order = ProductionOrder.objects.create(folio='LEGACY-WEIGHT-ORDER', program='S1', part=self.part,
+                                               quantity=2, remaining_quantity=2)
+        work = start_production(order=order, machine=Machine.objects.create(code='LEGACY-WEIGHT-MACHINE'), quantity=2)
+        close = close_production(work_item=work, quantity=2)
+        self.assertEqual(close.weight_kg, Decimal('0.600000'))
+
+    @override_settings(UR_WEIGHT_UNIT='')
+    def test_confirmed_central_grams_close_as_kilograms(self):
+        self.part.central_payload = {'weight': '125', 'weight_unit': 'g'}
+        self.part.unit_weight_kg = Decimal('0.125')
+        self.part.save(update_fields=['central_payload', 'unit_weight_kg'])
+        UniverseSyncState.objects.create(enabled=True)
+        order = ProductionOrder.objects.create(folio='WEIGHT-ORDER', program='S1', part=self.part,
+                                               quantity=4, remaining_quantity=4)
+        work = start_production(order=order, machine=Machine.objects.create(code='WEIGHT-MACHINE'), quantity=4)
+        close = close_production(work_item=work, quantity=4)
+        self.assertEqual(close.weight_kg, Decimal('0.500'))

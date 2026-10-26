@@ -157,6 +157,9 @@ def validate_parts(parts, include_samples):
         if not include_samples and part.get('is_sample', False):
             raise ResyncRequired('Cambió el permiso de pendientes de aprobación.')
         weight = part.get('weight')
+        weight_unit = part.get('weight_unit')
+        if 'weight_unit' in part and weight_unit not in ('', 'kg', 'g'):
+            raise UniverseAPIError('La API devolvió una unidad de peso inválida.')
         if weight is not None:
             try:
                 value = Decimal(str(weight))
@@ -195,9 +198,12 @@ def apply_catalog(parts, bootstrap, cursor, state, user=None):
         client = client_cache[name]
         available = payload['active']
         weight = Decimal(str(payload['weight'])) if payload.get('weight') is not None else None
-        if settings.UR_WEIGHT_UNIT == 'g' and weight is not None:
+        # New Universo Ramos responses declare the unit for each part. Older
+        # responses can still use the explicitly configured legacy unit.
+        weight_unit = payload.get('weight_unit') if 'weight_unit' in payload else settings.UR_WEIGHT_UNIT
+        if weight_unit == 'g' and weight is not None:
             weight = (weight / Decimal('1000')).quantize(Decimal('0.000001'))
-        elif not settings.UR_WEIGHT_UNIT:
+        elif weight_unit not in ('kg', 'g'):
             # The API explicitly does not infer weight units. Keep raw weight in
             # central_payload; never treat an unconfirmed unit as kilograms.
             if part and part.local_catalog_snapshot:
