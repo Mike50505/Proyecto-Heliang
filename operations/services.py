@@ -466,19 +466,6 @@ def close_production(*, work_item, quantity, employee=None, user=None, comment="
     from .universe_api import central_catalog_enabled
     current_part = (work.order.part.sample_base
                     if work.order.part.sample_base_id and central_catalog_enabled() else work.order.part)
-    if central_catalog_enabled():
-        catalog = current_part.central_payload or {}
-        weight_unit = catalog.get('weight_unit') if 'weight_unit' in catalog else settings.UR_WEIGHT_UNIT
-        unit_unconfirmed = (
-            weight_unit not in ('kg', 'g') and 'weight_unit' in catalog
-        ) or (
-            weight_unit not in ('kg', 'g') and 'weight_unit' not in catalog
-            and bool(settings.UR_WEIGHT_UNIT)
-        )
-        if catalog.get('weight') is None or unit_unconfirmed or current_part.unit_weight_kg is None:
-            raise ValidationError(
-                'El peso central está pendiente. Completa el peso en Universo Ramos, confirma su unidad (kg o g) y sincroniza antes de cerrar esta orden. No se utilizará un peso local ni se registrarán kilos en cero por un dato faltante.'
-            )
     unit_weight = current_part.unit_weight_kg or Decimal("0")
     close = ProductionClose.objects.create(
         folio=next_folio(ProductionClose, "C", when), work_item=work, quantity=quantity,
