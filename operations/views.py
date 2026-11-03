@@ -1094,6 +1094,7 @@ def heliang(request):
         pk__in=WorkInProcess.objects.filter(status=WorkInProcess.Status.ACTIVE).values("order__part__client_id")
     ).order_by("name", "pk")
     order_client_filter = request.GET.get("order_client", "").strip()
+    order_diameter_filter = request.GET.get("order_diameter", "").strip()
     work_client_filter = request.GET.get("work_client", "").strip()
     open_orders_query = ProductionOrder.objects.filter(status=ProductionOrder.Status.OPEN).select_related(
         "part", "part__client", "part__sample_base").annotate(
@@ -1104,6 +1105,25 @@ def heliang(request):
         open_orders_query = open_orders_query.filter(part__client_id=order_client_filter)
     else:
         order_client_filter = ""
+    available_orders_query = open_orders_query
+    diameter_counts = {}
+    diameter_raw_values = {}
+    for raw_diameter in available_orders_query.values_list("part__diameter", flat=True):
+        category = diameter_category(raw_diameter)
+        diameter_counts[category] = diameter_counts.get(category, 0) + 1
+        diameter_raw_values.setdefault(category, set()).add(raw_diameter)
+    available_order_diameters = [
+        {"value": category, "label": f"{category} · {count} órdenes" if count != 1 else f"{category} · 1 orden"}
+        for category, count in sorted(
+            diameter_counts.items(), key=lambda item: diameter_category_sort_key(item[0])
+        )
+    ]
+    if order_diameter_filter in diameter_raw_values:
+        available_orders_query = available_orders_query.filter(
+            part__diameter__in=diameter_raw_values[order_diameter_filter]
+        )
+    else:
+        order_diameter_filter = ""
     priority_orders = list(open_orders_query.filter(priority__isnull=False)[:100])
     priority_orders.sort(key=lambda order: (
         diameter_category_sort_key(diameter_category(order.part.diameter)),
@@ -1126,7 +1146,7 @@ def heliang(request):
         diameter_positions[order.diameter_group] = diameter_positions.get(order.diameter_group, 0) + 1
         order.heliang_priority = diameter_positions[order.diameter_group]
         previous_group = order.diameter_group
-    open_orders = list(open_orders_query[:100])
+    open_orders = list(available_orders_query[:100])
     for order in open_orders:
         order.part.diameter = format_diameter_fraction(order.part.diameter)
     all_active_items = WorkInProcess.objects.filter(status=WorkInProcess.Status.ACTIVE).select_related(
@@ -1153,7 +1173,9 @@ def heliang(request):
         "machine_rows": machine_rows, "selected_order": selected_order,
         "selected_work": selected_work, "order_clients": order_clients,
         "work_clients": work_clients, "order_client_filter": order_client_filter,
-        "work_client_filter": work_client_filter})
+        "work_client_filter": work_client_filter,
+        "order_diameter_filter": order_diameter_filter,
+        "available_order_diameters": available_order_diameters})
 
 
 def _quantity_text(value):
