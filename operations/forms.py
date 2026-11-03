@@ -73,7 +73,7 @@ class WorkChoiceField(forms.ModelChoiceField):
 
 class ProgramOrderForm(forms.Form):
     is_sample = forms.BooleanField(label="Muestra", required=False,
-        help_text="Al marcarla, esta orden nueva requiere 5 piezas.")
+        help_text="Clasifica esta orden como muestra; conserva la cantidad indicada.")
     client = forms.CharField(label="Cliente", max_length=150)
     part_number = forms.CharField(label="N.º de parte", max_length=120)
     program = forms.CharField(label="Programa / orden del cliente", max_length=80)
@@ -88,9 +88,7 @@ class ProgramOrderForm(forms.Form):
 
     def clean(self):
         cleaned = super().clean()
-        if cleaned.get('is_sample'):
-            cleaned['quantity'] = 5
-        elif cleaned.get('quantity') is None:
+        if cleaned.get('quantity') is None:
             self.add_error('quantity', 'La cantidad es obligatoria.')
         return cleaned
 

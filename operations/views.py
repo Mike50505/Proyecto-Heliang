@@ -592,7 +592,7 @@ def bulk_load_program(request):
                                          and (legacy_part.sample_base_id or legacy_part.legacy_number == part_number))
                 item['display_number'] = (legacy_part.sample_base.number if legacy_part.sample_base_id else legacy_part.number) if legacy_part else part_number
                 item['has_sample_label'] = '(MUESTRAS)' in item['display_number'].upper()
-                item['effective_quantity'] = '5' if item['is_sample'] else str(quantity)
+                item['effective_quantity'] = str(quantity)
                 try:
                     resolved_client = resolve_program_client(client_reference=client, part_number=part_number)
                     item["client_id"] = resolved_client.pk

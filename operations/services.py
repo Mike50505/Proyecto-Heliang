@@ -190,7 +190,7 @@ def create_program_order(*, client_name, part_number, program, quantity, employe
         if is_sample is None:
             is_sample = '(MUESTRAS)' in requested_number.upper()
     is_sample = bool(is_sample)
-    quantity = Decimal('5') if is_sample else Decimal(quantity)
+    quantity = Decimal(quantity)
     _require_whole_quantity(quantity)
     if quantity <= 0:
         raise ValidationError("La cantidad debe ser mayor que cero.")

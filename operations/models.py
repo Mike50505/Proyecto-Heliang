@@ -120,7 +120,7 @@ class ProductionOrder(TimeStamped):
     loaded_by = models.ForeignKey(settings.AUTH_USER_MODEL, null=True, blank=True, on_delete=models.SET_NULL)
     legacy_id = models.CharField(max_length=80, blank=True, db_index=True)
     is_sample = models.BooleanField("Muestra", default=False,
-        help_text="En órdenes nuevas, una muestra requiere 5 piezas. Editar esta marca conserva la cantidad existente.")
+        help_text="Clasifica la orden como muestra sin cambiar su cantidad.")
 
     @property
     def part_display(self):
