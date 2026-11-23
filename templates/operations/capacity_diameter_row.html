@@ -1,4 +1,4 @@
-<div class="cap-screen-row cap-diameter-capacity-row{% if row.over %} cap-over{% endif %}" data-cap-row role="row">
+<div class="cap-screen-row cap-diameter-capacity-row cap-selectable-row{% if row.over %} cap-over{% endif %}{% if chart_diameter == row.name %} is-chart-selection{% endif %}" data-cap-row data-chart-diameter="{{ row.name }}" tabindex="0" aria-selected="{% if chart_diameter == row.name %}true{% else %}false{% endif %}" aria-label="Mostrar {{ row.name }} en la gráfica de eficiencia por diámetro" role="row">
   <b role="rowheader" title="{{ row.name }}">{{ row.name }}</b>
   <span role="cell">{{ row.load|floatformat:"-3g" }}{% if row.over %}<span class="cap-sr"> (Excede el límite)</span>{% endif %}</span>
   <span role="cell">{{ row.limit|floatformat:"-3g" }}</span>

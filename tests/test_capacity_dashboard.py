@@ -72,6 +72,53 @@ def test_capacity_with_carry_and_client_filter(client, planner):
 
 
 @pytest.mark.django_db
+def test_physical_week_uses_local_closure_dates_across_programs(client, planner):
+    monday = date(2025, 12, 29)
+    first = midnight(monday)
+    next_monday = midnight(monday + timedelta(days=7))
+    alpha = Client.objects.create(code="A", name="Alpha")
+    beta = Client.objects.create(code="B", name="Beta")
+    machine = Machine.objects.create(code="INT22T05")
+
+    for index, (customer, program, closed_at, qty, shift) in enumerate([
+        (alpha, "2026-W01", first - timedelta(minutes=1), 100, "Turno A"),
+        (alpha, "2026-W01", first, 200, "Turno A"),
+        (beta, "Orden especial anterior", next_monday - timedelta(minutes=1), 400, "Turno B"),
+        (beta, "2025-W52", next_monday, 800, "Turno B"),
+    ]):
+        part = Part.objects.create(number=f"P-{index}", diameter="1/2", client=customer)
+        order = ProductionOrder.objects.create(
+            folio=f"O-{index}", program=program, part=part, quantity=1000, remaining_quantity=1000,
+        )
+        work = WorkInProcess.objects.create(
+            folio=f"W-{index}", order=order, machine=machine, initial_quantity=1000,
+            remaining_quantity=0, status="CLOSED", started_at=closed_at,
+        )
+        ProductionClose.objects.create(
+            folio=f"C-{index}", work_item=work, quantity=qty, shift=shift, closed_at=closed_at,
+        )
+
+    url = reverse("capacity-dashboard")
+    response = client.get(url, {"week_mode": "physical", "week": monday.isoformat(), "chart_diameter": "1/2"})
+    ctx = response.context
+    assert ctx["physical_week"] and ctx["week_monday"] == monday
+    assert ctx["week_sunday"] == monday + timedelta(days=6)
+    assert (ctx["total"].planned, ctx["total"].done, ctx["total"].pending) == (2000, 600, 1700)
+    assert ctx["plant"]["load"] == 600
+    assert ctx["diameter_series"][0][1:] == (200, 3840, 200, 0, 0)
+    assert ctx["diameter_series"][-1][1:] == (600, 19200, 200, 400, 0)
+    assert [row[1] for row in ctx["details"]] == ["O-2", "O-1"]
+    assert (next_monday.date().isoformat(), "Semana 02 · 2026") in ctx["weeks"]
+    assert ("program:Orden especial anterior", "Orden especial anterior") not in ctx["weeks"]
+
+    filtered = client.get(url, {"week_mode": "physical", "week": monday.isoformat(), "client": beta.pk}).context
+    assert filtered["total"].done == 400
+    assert filtered["plant"]["load"] == 600
+    assert [row[1] for row in filtered["details"]] == ["O-2"]
+    assert client.get(url, {"week": monday.isoformat()}).context["total"].done == 300
+
+
+@pytest.mark.django_db
 def test_shared_pool_unknown_size_and_unallocated_work(client, planner):
     config = CapacitySettings.objects.get(pk=1)
     config.diameters["5/8"] = 0

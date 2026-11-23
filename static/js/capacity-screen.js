@@ -20,6 +20,7 @@
     const parse = value => value === '' ? null : Number(value);
     const rows = [...canvas.nextElementSibling.children].map(({dataset}) => ({
       label: dataset.label,
+      date: dataset.date,
       actual: parse(dataset.actual),
       target: parse(dataset.target),
       shiftA: parse(dataset.shiftA),
@@ -45,6 +46,50 @@
     const x = index => left + (bars ? groupWidth * (index + .5) : (right - left) * index / (rows.length - 1));
     const y = value => bottom - (bottom - top) * value / max;
     const format = new Intl.NumberFormat('es-MX', {notation:'compact', maximumFractionDigits:1});
+    const exactFormat = new Intl.NumberFormat('es-MX', {maximumFractionDigits:0});
+    const parent = canvas.parentElement;
+    let tooltip = parent.querySelector('[data-cap-tooltip]');
+    if (!tooltip) {
+      tooltip = document.createElement('div');
+      tooltip.dataset.capTooltip = '';
+      tooltip.className = 'cap-chart-tooltip';
+      tooltip.setAttribute('role', 'tooltip');
+      tooltip.hidden = true;
+      parent.append(tooltip);
+    }
+    const targetLabel = canvas.closest('[data-cap-series]')?.querySelector('.cap-series-target')?.textContent.trim() || 'Meta';
+    canvas.capTooltipState = {rows, x, left, right, bars, targetLabel, exactFormat, tooltip, parent};
+    if (!canvas.dataset.capTooltipReady) {
+      canvas.dataset.capTooltipReady = 'true';
+      canvas.addEventListener('pointermove', event => {
+        const state = canvas.capTooltipState;
+        const bounds = canvas.getBoundingClientRect();
+        const pointerX = event.clientX - bounds.left;
+        if (!state || pointerX < state.left || pointerX > state.right) {
+          if (state) state.tooltip.hidden = true;
+          return;
+        }
+        const index = state.rows.reduce((nearest, row, i) =>
+          Math.abs(state.x(i) - pointerX) < Math.abs(state.x(nearest) - pointerX) ? i : nearest, 0);
+        const row = state.rows[index];
+        const amount = value => value === null ? '—' : state.exactFormat.format(value);
+        const lines = [row.date, `Producido: ${amount(row.actual)}`];
+        if (row.actual !== null) {
+          lines.push(`Turno A: ${amount(row.shiftA)}`, `Turno B: ${amount(row.shiftB)}`);
+          if (row.other > 0) lines.push(`Otros / sin turno: ${amount(row.other)}`);
+        }
+        lines.push(`${state.targetLabel}: ${amount(row.target)}`);
+        state.tooltip.textContent = lines.join('\n');
+        state.tooltip.hidden = false;
+        const x = state.x(index);
+        const y = event.clientY - bounds.top;
+        state.tooltip.style.left = `${Math.max(4, Math.min(state.parent.clientWidth - state.tooltip.offsetWidth - 4, x + 12))}px`;
+        state.tooltip.style.top = `${Math.max(4, Math.min(state.parent.clientHeight - state.tooltip.offsetHeight - 4, y + 12))}px`;
+      });
+      canvas.addEventListener('pointerleave', () => {
+        if (canvas.capTooltipState) canvas.capTooltipState.tooltip.hidden = true;
+      });
+    }
 
     context.font = `${font}px ${style.fontFamily}`;
     context.textAlign = 'right';
@@ -204,12 +249,14 @@
       if (pendingRequest !== request) return;
       const selectors = [
         '[data-cap-period]', '[data-cap-freshness]', '[data-cap-kpis]', '[data-cap-capacity]',
-        '[data-cap-list="machine-capacity"]', '[data-cap-list="diameter-capacity"]',
+        '[data-cap-list="machine-capacity"]', '[data-cap-list="diameter-capacity"]', '[data-cap-limit-label]',
+        '[data-cap-list="recent-closes"]',
+        '[data-cap-customers-title]', '[data-cap-diameter-title]',
         '[data-cap-list="clients"]', '[data-cap-list="orders"]', '[data-cap-orders-total]',
         '[data-cap-series="machine"]', '[data-cap-series="diameter"]', '[data-cap-details]',
       ];
       if (filterChanged || document.activeElement?.form !== form) {
-        selectors.push('#cap-week', '#cap-client',
+        selectors.push('#cap-week-mode', '#cap-week', '#cap-client',
                        '[data-cap-chart-filter][name=chart_machine]', '[data-cap-chart-filter][name=chart_diameter]');
       }
       const fragments = selectors.map(selector => [document.querySelector(selector), updated.querySelector(selector)]);
@@ -238,6 +285,29 @@
       if (pendingRequest === request) pendingRequest = undefined;
     }
   }
+
+  function selectChartRow(row) {
+    const name = row.dataset.chartMachine !== undefined ? 'chart_machine' : 'chart_diameter';
+    const value = row.dataset.chartMachine ?? row.dataset.chartDiameter;
+    const select = form.elements.namedItem(name);
+    if (select && select.value !== value) {
+      select.value = value;
+      form.requestSubmit();
+    }
+  }
+
+  screen.addEventListener('click', event => {
+    const row = event.target.closest('[data-chart-machine], [data-chart-diameter]');
+    if (row) selectChartRow(row);
+  });
+
+  screen.addEventListener('keydown', event => {
+    const row = event.target.closest('[data-chart-machine], [data-chart-diameter]');
+    if (row && (event.key === 'Enter' || event.key === ' ')) {
+      event.preventDefault();
+      selectChartRow(row);
+    }
+  });
 
   screen.addEventListener('change', event => {
     if (event.target.matches('[data-cap-chart-filter]')) form.requestSubmit();

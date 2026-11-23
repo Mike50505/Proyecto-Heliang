@@ -86,18 +86,22 @@ html[data-theme="dark"] .cap-screen {--tv-shift-b:#c5affb}
 .cap-screen .cap-kpis strong {font-size:clamp(1rem,1.55vw,2.15rem);line-height:1.1}
 .cap-screen-grid {
   display:grid;grid-template-columns:repeat(5,minmax(0,1fr));gap:clamp(.35rem,.8vw,.9rem);
-  grid-template-areas:"week client kpis capacity orders"
-                      "clients machines machines capacity orders"
-                      "clients diameters diameters capacity orders";
+  grid-template-areas:"week client kpis diameter-capacity machine-capacity"
+                      "clients machines machines orders orders"
+                      "clients diameters diameters recent recent";
 }
 .cap-week-filter {grid-area:week;justify-content:center;gap:.65em}
+#capacity-screen .cap-week-filter {gap:.35em}
+#capacity-screen .cap-week-filter select {min-height:2.15em;padding:.3em;font-size:.85em}
 .cap-client-filter {grid-area:client;justify-content:center;gap:.65em}
 .cap-week-filter label,.cap-client-filter label {font-weight:700}
-.cap-load {grid-area:capacity}
+.cap-machine-capacity-card {grid-area:machine-capacity}
+.cap-diameter-capacity-card {grid-area:diameter-capacity}
 .cap-clients {grid-area:clients}
 .cap-machines {grid-area:machines}
 .cap-diameters {grid-area:diameters}
 .cap-orders {grid-area:orders}
+.cap-recent {grid-area:recent}
 .cap-screen-card {
   display:flex;flex-direction:column;min-width:0;min-height:0;
   background:var(--tv-panel);border:1px solid var(--tv-line);border-radius:13px;
@@ -105,15 +109,18 @@ html[data-theme="dark"] .cap-screen {--tv-shift-b:#c5affb}
 }
 .cap-screen-card.cap-week-filter {border-top:3px solid var(--tv-blue)}
 .cap-screen-card:is(.cap-client-filter,.cap-clients) {border-top:3px solid var(--tv-green)}
-.cap-screen-card.cap-load {border-top:3px solid var(--tv-blue)}
+.cap-screen-card.cap-machine-capacity-card {border-top:3px solid var(--tv-blue)}
+.cap-screen-card.cap-diameter-capacity-card {border-top:3px solid var(--tv-green)}
 .cap-screen-card.cap-orders {border-top:3px solid var(--tv-amber)}
+.cap-screen-card.cap-recent {border-top:3px solid var(--tv-blue)}
 .cap-screen-card h2 {font-size:clamp(.94rem,1.3vw,1.75rem);margin:0;line-height:1.15;color:inherit}
 .cap-screen-card small {color:var(--tv-muted);font-size:.78em}
-.cap-capacity-summary,.cap-orders-total {display:grid;gap:.22em;margin-top:.4em}
+.cap-capacity-summary {display:flex;align-items:baseline;flex-wrap:wrap;gap:.08em .45em;margin-top:.22em}
+.cap-orders-total {display:grid;gap:.22em;margin-top:.4em}
 .cap-orders-total strong {font-size:clamp(1.35rem,2.1vw,2.75rem);line-height:1.1}
-.cap-capacity-summary strong {font-size:1.15em;line-height:1.1}
-.cap-capacity-summary span {font-size:.77em}
-.cap-load a {color:var(--tv-blue);font-size:.8em;margin-top:.4em}
+.cap-capacity-summary strong {font-size:1.02em;line-height:1.05}
+.cap-capacity-summary small,.cap-capacity-summary span {font-size:.68em;line-height:1.1;white-space:nowrap}
+.cap-machine-capacity-card a {color:var(--tv-blue);font-size:.8em;margin-top:.4em}
 .cap-capacity-group,.cap-machine-capacity {display:flex;flex-direction:column;min-height:0}
 .cap-screen .cap-capacity-table-title {font-size:.82em;margin:.55em 0 .14em;color:var(--tv-blue);line-height:1.2}
 .cap-machine-capacity-head,.cap-screen .cap-machine-capacity-row,
@@ -122,7 +129,7 @@ html[data-theme="dark"] .cap-screen {--tv-shift-b:#c5affb}
   align-items:center;gap:.25em;text-align:right;white-space:nowrap;
 }
 .cap-machine-capacity-head,.cap-screen .cap-machine-capacity-row {
-  grid-template-columns:minmax(0,1.33fr) minmax(0,1fr) minmax(0,1fr) minmax(0,.9fr);
+  grid-template-columns:minmax(0,1.05fr) minmax(0,.72fr) minmax(0,1.5fr);
 }
 .cap-diameter-capacity-head,.cap-screen .cap-diameter-capacity-row {
   grid-template-columns:minmax(0,1.4fr) repeat(2,minmax(0,1fr));
@@ -136,15 +143,24 @@ html[data-theme="dark"] .cap-screen {--tv-shift-b:#c5affb}
 .cap-machine-capacity-row b,.cap-diameter-capacity-row b {
   text-align:left;overflow:hidden;text-overflow:ellipsis;
 }
-.cap-machine-capacity-row strong {color:var(--tv-green)}
-.cap-machine-capacity-row .cap-machine-shifts {
-  grid-column:1 / -1;display:flex;justify-content:flex-end;gap:.55em;
-  font-size:.76em;line-height:1.15;
-}
-.cap-machine-shifts span:first-child {color:var(--tv-shift-a)}
-.cap-machine-shifts span:nth-child(2) {color:var(--tv-shift-b)}
-.cap-load abbr {text-decoration:none}
+.cap-machine-output {display:grid;justify-items:end;min-width:0;line-height:1.05}
+.cap-machine-output strong {color:var(--tv-green);font-size:.9em}
+.cap-machine-output .cap-machine-shifts {max-width:100%;font-size:.59em;line-height:1.05;white-space:nowrap}
+.cap-machine-shifts .shift-a {color:var(--tv-shift-a)}
+.cap-machine-shifts .shift-b {color:var(--tv-shift-b)}
+.cap-screen .cap-selectable-row {cursor:pointer;border-radius:3px}
+.cap-screen .cap-selectable-row:hover,.cap-screen .cap-selectable-row.is-chart-selection {background:color-mix(in srgb,var(--tv-blue) 12%,transparent)}
+.cap-screen .cap-selectable-row.is-chart-selection {box-shadow:inset 3px 0 0 var(--tv-blue)}
+.cap-screen .cap-selectable-row:focus-visible {outline:2px solid var(--tv-blue);outline-offset:-2px}
+.cap-machine-capacity-card abbr {text-decoration:none}
 .cap-screen .cap-machine-capacity-list {margin-top:0}
+.cap-card-heading {display:flex;align-items:baseline;justify-content:space-between;gap:.5em}
+.cap-screen .cap-close-row {grid-template-columns:auto minmax(0,1fr) auto;align-items:center;gap:.45em}
+.cap-close-row time {font-size:.74em;color:var(--tv-muted);white-space:nowrap}
+.cap-close-details {display:grid;min-width:0;gap:.12em}
+.cap-close-details b,.cap-close-details small {overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.cap-close-details b {font-size:.84em}
+.cap-close-row>strong {color:var(--tv-green);font-size:.86em;white-space:nowrap}
 .cap-orders-total strong {color:var(--tv-amber)}
 .cap-chart-content {flex:1;display:flex;flex-direction:column;min-height:0}
 .cap-chart-heading {display:flex;justify-content:space-between;align-items:center;gap:.5rem;min-width:0}
@@ -165,6 +181,11 @@ html[data-theme="dark"] .cap-screen {--tv-shift-b:#c5affb}
 .cap-screen:not(:fullscreen) .cap-screen-list {max-height:30rem;overflow:auto}
 .cap-line-chart {position:relative;flex:1;min-height:12rem;margin-top:.3em}
 .cap-line-chart canvas {position:absolute;inset:0;width:100%;height:100%}
+.cap-chart-tooltip {
+  position:absolute;z-index:5;max-width:min(17rem,calc(100% - .5rem));padding:.55em .75em;border:1px solid var(--tv-line);
+  border-radius:.5rem;background:var(--tv-panel);color:var(--h-ink);box-shadow:0 4px 18px #0005;
+  font-size:clamp(.72rem,.85vw,1rem);line-height:1.45;white-space:pre-line;pointer-events:none
+}
 .cap-line-chart canvas:not([hidden]) + ul {
   position:absolute;width:1px;height:1px;overflow:hidden;clip-path:inset(50%);white-space:nowrap;
 }
@@ -189,28 +210,33 @@ html[data-theme="dark"] .cap-screen {--tv-shift-b:#c5affb}
 .cap-screen:fullscreen {
   width:100vw;height:100dvh;overflow:hidden;border-radius:0;
   grid-template-rows:auto minmax(0,1fr) auto;
-  font-size:clamp(.76rem,1.04vw,1.55rem);gap:1vh;
+  --cap-tv-font:clamp(10px,min(1.04vw,1.6vh),25px);
+  font-size:var(--cap-tv-font);gap:1vh;
 }
 .cap-screen:fullscreen::backdrop {background:var(--tv-bg)}
-.cap-screen:fullscreen .cap-screen-actions a,.cap-screen:fullscreen .cap-load a {display:none}
-.cap-screen:fullscreen .cap-screen-grid {min-height:0;grid-template-rows:auto repeat(2,minmax(0,1fr))}
-.cap-screen:fullscreen .cap-screen-card {overflow:hidden}
+.cap-screen:fullscreen .cap-screen-actions a,.cap-screen:fullscreen .cap-machine-capacity-card a {display:none}
+.cap-screen:fullscreen .cap-screen-grid {min-height:0;grid-template-rows:minmax(0,.9fr) repeat(2,minmax(0,1fr));gap:clamp(4px,1vh,16px)}
+.cap-screen:fullscreen .cap-screen-card {overflow:hidden;padding:.5em .65em}
+.cap-screen:fullscreen .cap-screen-card h2 {font-size:1.13em}
 .cap-screen:fullscreen .cap-screen-list {min-height:0;flex:1;overflow:hidden}
 .cap-screen:fullscreen .cap-screen-row {height:clamp(3.55em,5.55vh,5.8rem);padding:.3em 0}
 .cap-screen:fullscreen .cap-orders .cap-screen-row {height:clamp(2.85em,4.7vh,5rem)}
+.cap-screen:fullscreen .cap-close-row {height:clamp(2.5em,3.4vh,3rem);padding:.2em 0}
 .cap-screen:fullscreen :is(.cap-machine-capacity-row,.cap-diameter-capacity-row) {height:1.6em;padding:.1em 0}
-.cap-screen:fullscreen .cap-machine-capacity-row {height:2.45em}
+.cap-screen:fullscreen :is(.cap-machine-capacity-row,.cap-diameter-capacity-row) {font-size:.68em}
+.cap-screen:fullscreen .cap-machine-capacity-head,.cap-screen:fullscreen .cap-diameter-capacity-head {font-size:.62em}
+.cap-screen:fullscreen .cap-machine-capacity-row {height:1.7em;padding:0}
 .cap-screen:fullscreen .cap-machine-capacity-list {flex:0 1 auto}
 @media(max-width:900px) {
   .cap-screen:not(:fullscreen) .cap-screen-grid {
     grid-template-columns:repeat(2,minmax(0,1fr));
-    grid-template-areas:"week client" "kpis capacity" "machines machines" "diameters diameters" "clients orders";
+    grid-template-areas:"week client" "kpis kpis" "machine-capacity diameter-capacity" "clients clients" "machines machines" "diameters diameters" "orders orders" "recent recent";
   }
   .cap-screen:not(:fullscreen) .cap-screen-head {flex-wrap:wrap}
 }
 @media(max-width:540px) {
   .cap-screen:not(:fullscreen) .cap-screen-grid {
     grid-template-columns:minmax(0,1fr);
-    grid-template-areas:"week" "client" "kpis" "capacity" "machines" "diameters" "clients" "orders";
+    grid-template-areas:"week" "client" "kpis" "machine-capacity" "diameter-capacity" "clients" "machines" "diameters" "orders" "recent";
   }
 }

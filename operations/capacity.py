@@ -9,8 +9,8 @@ from django.contrib import messages
 from django.contrib.auth.decorators import login_required, permission_required
 from django.core.paginator import Paginator
 from django.db import transaction
-from django.db.models import Q, Sum, Value
-from django.db.models.functions import Greatest, TruncDate
+from django.db.models import Case, DateTimeField, F, Q, Sum, Value, When
+from django.db.models.functions import TruncDate, TruncWeek
 from django.shortcuts import redirect, render
 from django.utils import timezone
 from django.views.decorators.cache import never_cache
@@ -18,11 +18,12 @@ from django.views.decorators.http import require_http_methods
 
 from .access import module_required
 from .formatting import diameter_category, diameter_category_sort_key
-from .models import AuditEvent, CapacitySettings, Machine, ProductionClose, ProductionOrder
+from .models import AuditEvent, CapacitySettings, ProductionClose, ProductionOrder
 
 
 WEEK = re.compile(r"(?:(\d{4})[ -]?)?(?:SEMANA|SEM|WK|W|S)?\s*0?(\d{1,2})(?:[ /-]+(\d{4}))?", re.I)
 SHARED = ("5/16", "1/4")
+SHARED_LABEL = "5/16 + 1/4"
 OUTPUT_SHIFTS = ("a", "b", "other")
 
 
@@ -81,19 +82,36 @@ def midnight(day):
     return timezone.make_aware(datetime.combine(day, time.min))
 
 
+def operational_closes(closes):
+    """Assign Turno B closes before 06:00 to the day the shift began."""
+    turno_b = Q(shift__iexact="b") | Q(shift__iexact="turno b")
+    operational_at = Case(
+        When(turno_b, closed_at__time__lt=time(6), then=F("closed_at") - timedelta(days=1)),
+        default=F("closed_at"),
+        output_field=DateTimeField(),
+    )
+    return closes.annotate(operational_at=operational_at).annotate(
+        work_date=TruncDate("operational_at", tzinfo=timezone.get_current_timezone())
+    )
+
+
 def output_shift(label):
     name = " ".join(label.casefold().split()).removeprefix("turno ")
     return name if name in ("a", "b") else "other"
 
 
-def weekly_series(dates, today, workdays, daily_output, target):
+def weekly_series(dates, today, workdays, daily_output, target, daily=False):
     totals = Counter()
     rows = []
     for index, day in enumerate(dates, start=1):
-        totals.update({shift: daily_output[day, shift] for shift in OUTPUT_SHIFTS})
-        expected = Decimal(target) * min(index, workdays) / workdays if target is not None else None
-        actual = totals.total() if day <= today else None
-        quantities = [totals[shift] if day <= today else None for shift in OUTPUT_SHIFTS]
+        output = Counter({shift: daily_output[day, shift] for shift in OUTPUT_SHIFTS})
+        totals.update(output)
+        expected = (Decimal(target) / workdays if index <= workdays else Decimal(0)) if daily and target is not None else (
+            Decimal(target) * min(index, workdays) / workdays if target is not None else None
+        )
+        values = output if daily else totals
+        actual = values.total() if day <= today else None
+        quantities = [values[shift] if day <= today else None for shift in OUTPUT_SHIFTS]
         rows.append((day, actual, expected, *quantities))
     return rows
 
@@ -101,6 +119,15 @@ def weekly_series(dates, today, workdays, daily_output, target):
 def configured_machine_code(code, config):
     pieces = code.split()
     return pieces[0] if pieces and pieces[0] in config.machines else code
+
+
+def physical_output(closes):
+    """Group operational-day production by original order and recorded shift."""
+    order_path = "work_item__order__"
+    fields = ("folio", "program", "part__number", "part__client_id", "part__client__name", "part__diameter")
+    return closes.values_list(
+        "work_date", *(order_path + field for field in fields), "shift"
+    ).annotate(qty=Sum("quantity")).order_by("-work_date", order_path + "folio", "shift")
 
 
 @login_required
@@ -111,6 +138,7 @@ def dashboard(request):
     snapshot_at = timezone.now()
     today = timezone.localdate(snapshot_at)
     current = today - timedelta(days=today.weekday())
+    physical = request.GET.get("week_mode") == "physical"
     orders = ProductionOrder.objects.exclude(status=ProductionOrder.Status.CANCELLED)
     periods = {current.isoformat(): (current, week_label(current))}
     # A legacy program may contain only S35. Anchor its year to the load date.
@@ -122,12 +150,27 @@ def dashboard(request):
         key = start.isoformat() if start else "program:" + program
         clients_by_period[key][str(cid or "none")] = customer or "Sin cliente"
         periods[key] = (start, week_label(start) if start else program or "Sin programa")
+    if physical:
+        periods = {key: value for key, value in periods.items() if value[0]}
+        closed_weeks = operational_closes(ProductionClose.objects.filter(closed_at__lt=snapshot_at)).annotate(
+            close_week=TruncWeek("operational_at", tzinfo=timezone.get_current_timezone())
+        ).order_by().values_list("close_week", flat=True).distinct()
+        for week in closed_weeks:
+            monday = timezone.localdate(week)
+            periods[monday.isoformat()] = (monday, week_label(monday))
     selected = request.GET.get("week", current.isoformat())
     if selected not in periods:
         selected = current.isoformat()
     start, label = periods[selected]
-    end = midnight(start + timedelta(days=7)) if start else None
+    end = midnight(start + timedelta(days=7)) + timedelta(hours=6) if start else None
     cutoff = min(snapshot_at, end) if end else snapshot_at
+    runs = operational_closes(ProductionClose.objects.filter(closed_at__lt=cutoff)).filter(
+        work_date__gte=start, work_date__lt=start + timedelta(days=7)
+    ) if start else ProductionClose.objects.none()
+    actual_by_diameter = defaultdict(Counter)
+    physical_load = Counter()
+    produced_by_customer = Counter()
+    closed_details = []
     close_date = "work_items__closes__closed_at"
     sums = {"done": Sum("work_items__closes__quantity", filter=Q(**{close_date + "__lt": cutoff}))}
     if start:
@@ -138,6 +181,13 @@ def dashboard(request):
     ).annotate(**sums).order_by("part__client__name", "part__number", "id")
     client = request.GET.get("client", "")
     clients = clients_by_period[selected]
+    if physical:
+        # Include customers who closed an older order during this week.
+        physical_clients = runs.order_by().values_list(
+            "work_item__order__part__client_id", "work_item__order__part__client__name"
+        ).distinct()
+        for cid, name in physical_clients:
+            clients[str(cid or "none")] = name or "Sin cliente"
     if client not in clients:
         client = ""
     details = []
@@ -170,9 +220,23 @@ def dashboard(request):
         for group in (total, by_customer[cid], by_diameter[size]):
             group.add(qty, done, available)
         details.append((row["folio"], row["part__number"], name, size, qty, done, max(0, qty - done)))
+    if physical:
+        for work_date, folio, program, part, cid, name, size, shift_label, quantity in physical_output(runs):
+            size = diameter(size)
+            physical_load[size] += quantity
+            cid = str(cid or "none")
+            if client and cid != client:
+                continue
+            produced_by_customer[cid] += quantity
+            actual_by_diameter[size][work_date, output_shift(shift_label)] += quantity
+            closed_details.append((work_date, folio, program, part, name or "Sin cliente", size, shift_label, quantity))
+        total.done = produced_by_customer.total()
+        # The customer bar in physical mode shows share of selected production.
+        by_customer = {cid: Progress(planned=total.done, done=qty) for cid, qty in produced_by_customer.items()}
+        planned, carry = physical_load, Counter()
     sizes = list(config.diameters) + sorted((planned.keys() | carry.keys()) - config.diameters.keys())
-    rows = [capacity_row(s, config.diameters.get(s), planned[s], carry[s]) for s in sizes
-            if s in config.diameters or planned[s] or carry[s]]
+    rows = [capacity_row(s, config.diameters[s], planned[s], carry[s]) for s in sizes
+            if s in config.diameters and config.diameters[s] is not None and config.diameters[s] > 0]
     weekly_hours = config.hours * config.shifts * config.days
     machine_limits = {code: weekly_hours * machine["rate"] if machine["enabled"] else 0
                       for code, machine in config.machines.items()}
@@ -184,13 +248,16 @@ def dashboard(request):
     machine_series = []
     diameter_series = []
     machine_daily = defaultdict(Counter)
-    registered_machines = {configured_machine_code(code, config) for code in
-                           Machine.objects.filter(active=True).values_list("code", flat=True)}
-    machine_options = sorted(machine_limits.keys() | registered_machines)
-    diameter_options = sorted(by_diameter, key=diameter_category_sort_key)
+    machine_options = sorted(code for code, limit in machine_limits.items() if limit > 0)
+    available_diameters = (actual_by_diameter.keys() | by_diameter.keys()) if physical else by_diameter.keys()
+    diameter_options = sorted((size for size in available_diameters
+                               if config.diameters.get(size) is not None and config.diameters.get(size) > 0),
+                              key=diameter_category_sort_key)
+    if config.shared_limit is not None and config.shared_limit > 0:
+        diameter_options.append(SHARED_LABEL)
     machine_code = request.GET.get("chart_machine", "")
     chart_diameter = request.GET.get("chart_diameter", "")
-    if chart_diameter not in by_diameter:
+    if chart_diameter not in diameter_options:
         chart_diameter = ""
     day = request.GET.get("day", "")
     shift = request.GET.get("shift", "")
@@ -198,12 +265,11 @@ def dashboard(request):
     if start:
         dates = [start + timedelta(days=i) for i in range(7)]
         chosen_day = next((d for d in dates if d.isoformat() == day), None)
-        runs = ProductionClose.objects.filter(closed_at__gte=midnight(start), closed_at__lt=cutoff)
-        for code, work_date, shift_label, quantity in runs.annotate(work_date=TruncDate("closed_at")).values_list(
+        for code, work_date, shift_label, quantity in runs.values_list(
             "work_item__machine__code", "work_date", "shift"
         ).annotate(qty=Sum("quantity")):
             machine_daily[configured_machine_code(code, config)][work_date, output_shift(shift_label)] += quantity
-        machine_options = sorted(machine_limits.keys() | registered_machines | machine_daily.keys())
+        machine_options = sorted(code for code, limit in machine_limits.items() if limit > 0)
         if machine_code not in machine_options:
             machine_code = ""
         if machine_code:
@@ -214,23 +280,35 @@ def dashboard(request):
             machine_output = Counter()
             for daily_output in machine_daily.values():
                 machine_output.update(daily_output)
-        machine_series = weekly_series(dates, today, config.days, machine_output, machine_target)
+        machine_series = weekly_series(dates, today, config.days, machine_output, machine_target, daily=True)
 
-        matching_orders = [order_id for order_id, size in selected_parts.items()
-                           if not chart_diameter or size == chart_diameter]
-        diameter_target = by_diameter[chart_diameter].planned if chart_diameter else total.planned
-        if diameter_target:
-            # Credit production from before the selected week to its opening day, as in the program total.
-            closes_by_shift = ProductionClose.objects.filter(work_item__order_id__in=matching_orders,
-                                                               closed_at__lt=cutoff)
-            closes_by_shift = closes_by_shift.annotate(work_date=Greatest(TruncDate("closed_at"), Value(start)))
+        if physical:
             diameter_output = Counter()
-            for work_date, shift_label, quantity in closes_by_shift.values_list("work_date", "shift").annotate(qty=Sum("quantity")):
-                diameter_output[work_date, output_shift(shift_label)] += quantity
-            diameter_series = weekly_series(dates, today, config.days, diameter_output, diameter_target)
+            for size, output_by_day in actual_by_diameter.items():
+                if not chart_diameter or (size in SHARED if chart_diameter == SHARED_LABEL else size == chart_diameter):
+                    diameter_output.update(output_by_day)
+            diameter_target = (config.shared_limit if chart_diameter == SHARED_LABEL else
+                               config.diameters.get(chart_diameter)) if chart_diameter else plant_limit
+            diameter_series = weekly_series(dates, today, config.days, diameter_output, diameter_target, daily=True)
+        else:
+            selected_sizes = SHARED if chart_diameter == SHARED_LABEL else (chart_diameter,) if chart_diameter else ()
+            diameter_target = (sum(by_diameter[size].planned for size in selected_sizes) if selected_sizes
+                               else by_diameter[chart_diameter].planned if chart_diameter else total.planned)
+            if diameter_target:
+                matching_orders = [order_id for order_id, size in selected_parts.items()
+                                   if not chart_diameter or (size in SHARED if chart_diameter == SHARED_LABEL else size == chart_diameter)]
+                closes_by_shift = ProductionClose.objects.filter(work_item__order_id__in=matching_orders,
+                                                                   closed_at__lt=cutoff)
+                closes_by_shift = operational_closes(closes_by_shift).filter(
+                    work_date__gte=start, work_date__lt=start + timedelta(days=7)
+                )
+                diameter_output = Counter()
+                for work_date, shift_label, quantity in closes_by_shift.values_list("work_date", "shift").annotate(qty=Sum("quantity")):
+                    diameter_output[work_date, output_shift(shift_label)] += quantity
+                diameter_series = weekly_series(dates, today, config.days, diameter_output, diameter_target, daily=True)
 
         if chosen_day:
-            runs = runs.filter(closed_at__date=chosen_day)
+            runs = runs.filter(work_date=chosen_day)
         shift_options = list(runs.exclude(shift="").order_by("shift").values_list("shift", flat=True).distinct())
         if shift not in shift_options:
             shift = ""
@@ -243,7 +321,8 @@ def dashboard(request):
         for code in sorted(config.machines.keys() | output.keys()):
             machine = config.machines.get(code)
             target = machine["rate"] * hours * int(machine["enabled"]) if machine else None
-            machine_rows.append((code, target, output[code], 100 * output[code] / target if target else None))
+            if target is not None and target > 0:
+                machine_rows.append((code, target, output[code], 100 * output[code] / target))
     else:
         dates = []
     weekly_machines = []
@@ -256,11 +335,17 @@ def dashboard(request):
         for (_, shift_key), quantity in daily_output.items():
             by_shift[shift_key] += quantity
         weekly_machines.append((code, limit, produced, used, by_shift["a"], by_shift["b"], by_shift["other"]))
+    recent_closes = ProductionClose.objects.select_related(
+        "work_item__order__part", "work_item__machine"
+    ).order_by("-closed_at")[:20]
     params = request.GET.copy()
     params.pop("page", None)
     return render(request, "operations/capacity.html", {
-        "weeks": [(k, v[1]) for k, v in sorted(periods.items(), key=lambda item: item[0], reverse=True)],
+        "weeks": [(k, f"{v[1]} · {v[0]:%d/%m/%Y}–{(v[0] + timedelta(days=6)):%d/%m/%Y}" if v[0] else v[1])
+                  for k, v in sorted(periods.items(), key=lambda item: item[0], reverse=True)],
         "week": selected, "label": label, "calendar_week": bool(start), "clients": sorted(clients.items(), key=lambda item: item[1]),
+        "physical_week": physical,
+        "week_monday": start, "week_sunday": dates[-1] if dates else None,
         "snapshot_at": snapshot_at,
         "client": client, "total": total, "customers": [(clients[k], v) for k, v in by_customer.items()],
         "available_orders": available_orders,
@@ -269,8 +354,10 @@ def dashboard(request):
         "machine_other_output": any(row[-1] for row in machine_series),
         "diameter_other_output": any(row[-1] for row in diameter_series),
         "capacities": rows, "plant": plant, "pool": pool, "installed": installed,
+        "recent_closes": recent_closes,
         "plant_gap": abs(plant["margin"]), "over_limits": [r["name"] for r in rows if r["over"]],
-        "details": Paginator(details, 30).get_page(request.GET.get("page")), "params": params.urlencode(),
+        "details": Paginator(closed_details if physical else details, 30).get_page(request.GET.get("page")),
+        "params": params.urlencode(),
         "machines": machine_rows, "weekly_machines": weekly_machines,
         "dates": dates, "day": day, "shifts": shift_options, "shift": shift,
     })
