@@ -172,7 +172,9 @@ def dashboard(request):
     produced_by_customer = Counter()
     closed_details = []
     close_date = "work_items__closes__closed_at"
-    sums = {"done": Sum("work_items__closes__quantity", filter=Q(**{close_date + "__lt": cutoff}))}
+    # Follow the orders assigned to the program through the current snapshot,
+    # even when their production closes after the program's week.
+    sums = {"done": Sum("work_items__closes__quantity", filter=Q(**{close_date + "__lt": snapshot_at}))}
     if start:
         sums["prior"] = Sum("work_items__closes__quantity", filter=Q(**{close_date + "__lt": min(midnight(start), cutoff)}))
     records = orders.annotate(loaded=TruncDate("created_at")).values(
@@ -212,6 +214,9 @@ def dashboard(request):
                 carry[size] += max(0, qty - (row["prior"] or 0))
             continue
         done = row["done"] or 0
+        # Older imports may mark an order complete without recording every close.
+        if row["status"] == ProductionOrder.Status.COMPLETE:
+            done = max(done, qty)
         planned[size] += qty
         cid = str(row["part__client_id"] or "none")
         clients[cid] = name
