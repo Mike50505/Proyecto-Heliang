@@ -22,7 +22,6 @@
       date: dataset.date,
       actual: parse(dataset.actual),
       target: parse(dataset.target),
-      limit: parse(dataset.limit),
       shiftA: parse(dataset.shiftA),
       shiftB: parse(dataset.shiftB),
       other: parse(dataset.other),
@@ -39,7 +38,7 @@
     const right = width - font * 1.6;
     const top = font * .65;
     const bottom = height - font * 1.7;
-    const peak = Math.max(3, ...rows.map(row => Math.max(row.actual ?? 0, row.target ?? 0, row.limit ?? 0)));
+    const peak = Math.max(3, ...rows.map(row => Math.max(row.actual ?? 0, row.target ?? 0)));
     const step = 10 ** Math.floor(Math.log10(peak / 3));
     const max = 3 * step * Math.ceil(peak / (3 * step));
     const groupWidth = (right - left) / rows.length;
@@ -79,7 +78,6 @@
           if (row.other > 0) lines.push(`Otros / sin turno: ${amount(row.other)}`);
         }
         lines.push(`${state.targetLabel}: ${amount(row.target)}`);
-        if (row.limit !== null) lines.push(`Máximo diario: ${amount(row.limit)}`);
         state.tooltip.textContent = lines.join('\n');
         state.tooltip.hidden = false;
         const x = state.x(index);
@@ -125,10 +123,6 @@
           context.fillStyle = style.getPropertyValue('--tv-amber').trim();
           context.fillRect(x(index) + gap / 2, y(row.target), barWidth, bottom - y(row.target));
         }
-        if (row.limit !== null) {
-          context.fillStyle = style.getPropertyValue('--tv-red').trim();
-          context.fillRect(x(index) - groupWidth * .44, y(row.limit) - 1, groupWidth * .88, 2);
-        }
       });
       return;
     }
@@ -136,7 +130,6 @@
     const series = [
       ['actual', '--tv-green', []], ['shiftA', '--tv-shift-a', []], ['shiftB', '--tv-shift-b', [.19, .32]],
       ['other', '--tv-muted', [.15, .48]], ['target', '--tv-amber', [.55, .36]],
-      ['limit', '--tv-red', [.22, .25]],
     ];
     for (const [key, color, dash] of series) {
       if (key === 'other' && !rows.some(row => row.other > 0)) continue;

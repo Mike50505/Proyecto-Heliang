@@ -194,7 +194,7 @@ def dashboard(request):
     details = []
     available_orders = []
     selected_parts = {}
-    by_customer, by_diameter = defaultdict(Progress), defaultdict(Progress)
+    by_customer = defaultdict(Progress)
     planned, carry = defaultdict(int), defaultdict(int)
     total = Progress()
     for row in records.iterator():
@@ -219,7 +219,7 @@ def dashboard(request):
             continue
         if start:
             selected_parts[row["id"]] = size
-        for group in (total, by_customer[cid], by_diameter[size]):
+        for group in (total, by_customer[cid]):
             group.add(qty, done, available)
         details.append((row["folio"], row["part__number"], name, size, qty, done, max(0, qty - done)))
     if physical:
@@ -292,27 +292,18 @@ def dashboard(request):
                 machine_output.update(daily_output)
         machine_series = weekly_series(dates, today, config.days, machine_output, machine_target, daily=True)
 
+        diameter_output = Counter()
         if physical:
-            diameter_output = Counter()
             for size, output_by_day in actual_by_diameter.items():
                 if not selected_sizes or size in selected_sizes:
                     diameter_output.update(output_by_day)
-            diameter_series = weekly_series(dates, today, config.days, diameter_output, diameter_limit, daily=True)
         else:
-            diameter_target = (sum(by_diameter[size].planned for size in selected_sizes) if selected_sizes
-                               else total.planned)
-            if diameter_target or diameter_limit:
-                matching_orders = [order_id for order_id, size in selected_parts.items()
-                                   if not selected_sizes or size in selected_sizes]
-                closes_by_shift = ProductionClose.objects.filter(work_item__order_id__in=matching_orders,
-                                                                   closed_at__lt=cutoff)
-                closes_by_shift = operational_closes(closes_by_shift).filter(
-                    work_date__gte=start, work_date__lt=start + timedelta(days=7)
-                )
-                diameter_output = Counter()
-                for work_date, shift_label, quantity in closes_by_shift.values_list("work_date", "shift").annotate(qty=Sum("quantity")):
-                    diameter_output[work_date, output_shift(shift_label)] += quantity
-                diameter_series = weekly_series(dates, today, config.days, diameter_output, diameter_target, daily=True)
+            matching_orders = [order_id for order_id, size in selected_parts.items()
+                               if not selected_sizes or size in selected_sizes]
+            closes_by_shift = runs.filter(work_item__order_id__in=matching_orders)
+            for work_date, shift_label, quantity in closes_by_shift.values_list("work_date", "shift").annotate(qty=Sum("quantity")):
+                diameter_output[work_date, output_shift(shift_label)] += quantity
+        diameter_series = weekly_series(dates, today, config.days, diameter_output, diameter_limit, daily=True)
 
         if chosen_day:
             runs = runs.filter(work_date=chosen_day)
@@ -360,8 +351,6 @@ def dashboard(request):
         "available_orders": available_orders,
         "machine_series": machine_series, "machine_options": machine_options, "chart_machine": machine_code,
         "diameter_series": diameter_series, "diameter_options": diameter_options, "chart_diameter": chart_diameter,
-        "diameter_daily_limit": Decimal(diameter_limit) / config.days,
-        "capacity_workdays": config.days,
         "machine_other_output": any(row[-1] for row in machine_series),
         "diameter_other_output": any(row[-1] for row in diameter_series),
         "capacities": rows, "plant": plant, "pool": pool, "installed": installed,

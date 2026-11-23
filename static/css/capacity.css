@@ -186,13 +186,10 @@ html[data-theme="dark"] .cap-screen {--tv-shift-b:#c5affb}
 .cap-series-b {--series-color:var(--tv-shift-b)}
 .cap-series-other {--series-color:var(--tv-muted)}
 .cap-series-target {--series-color:var(--tv-amber)}
-.cap-series-limit {--series-color:var(--tv-red)}
 .cap-chart-legend span::before {content:"";display:inline-block;width:1.2em;border-top:2px solid var(--series-color);vertical-align:middle;margin-right:.35em}
 .cap-chart-legend .cap-series-target::before {border-top-style:dashed}
-.cap-chart-legend .cap-series-limit::before {border-top-style:dotted}
 .cap-chart-legend .cap-series-b::before {border-top-style:dotted}
 .cap-screen[data-chart-type="bars"] .cap-chart-legend span::before {width:.75em;height:.72em;border:0;background:var(--series-color)}
-.cap-screen[data-chart-type="bars"] .cap-chart-legend .cap-series-limit::before {height:2px}
 .cap-screen[data-chart-type="bars"] .cap-series-total {display:none}
 .cap-chart-legend small {font-size:1em}
 .cap-screen-list {margin-top:.4em}
