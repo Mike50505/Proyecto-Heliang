@@ -226,14 +226,14 @@
       if (pendingRequest !== request) return;
       const selectors = [
         '[data-cap-period]', '[data-cap-freshness]', '[data-cap-kpis]', '[data-cap-capacity]',
-        '[data-cap-list="machine-capacity"]', '[data-cap-list="diameter-capacity"]', '[data-cap-limit-label]',
+        '[data-cap-list="machine-capacity"]', '[data-cap-list="diameter-capacity"]',
         '[data-cap-list="recent-closes"]',
-        '[data-cap-customer-pie]', '[data-cap-diameter-title]',
+        '[data-cap-customer-pie]',
         '[data-cap-list="clients"]', '[data-cap-order-table]', '[data-cap-orders-total]',
         '[data-cap-series="machine"]', '[data-cap-series="diameter"]', '[data-cap-details]',
       ];
       if (filterChanged || document.activeElement?.form !== form) {
-        selectors.push('#cap-week-mode', '#cap-week', '#cap-client',
+        selectors.push('#cap-week', '#cap-client',
                        '[data-cap-chart-filter][name=chart_machine]', '[data-cap-chart-filter][name=chart_diameter]');
       }
       const fragments = selectors.map(selector => [document.querySelector(selector), updated.querySelector(selector)]);

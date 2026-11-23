@@ -5,31 +5,30 @@
 <div class="capacity-board">
 {% include 'operations/capacity_screen.html' %}
 <div data-cap-details>
-<section class="panel" id="capacidad"><div class="cap-heading"><div><h2>Detalle de capacidad instalada</h2><p>{% if physical_week %}Piezas cerradas de lunes a domingo para todos los clientes, con los límites vigentes.{% else %}Carga de todos los clientes con los límites vigentes. El arrastre es el saldo de semanas anteriores al inicio del periodo.{% endif %}</p></div>
+<section class="panel" id="capacidad"><div class="cap-heading"><div><h2>Detalle de capacidad instalada</h2><p>Carga de todos los clientes con los límites vigentes. El arrastre es el saldo de semanas anteriores al inicio del periodo.</p></div>
 <div class="cap-summary {% if plant.over %}cap-warning{% endif %}"><b>{{ plant.load|floatformat:"-3g" }} / {{ plant.limit|floatformat:"-3g" }}</b><small>piezas de planta · {% if plant.over %}límite excedido{% else %}dentro del límite{% endif %}</small></div></div>
 {% if not calendar_week %}<p role="note">Este programa no identifica una semana calendario. Se muestra sólo su carga, sin arrastre.</p>{% endif %}
-<div class="table-wrap"><table><thead><tr><th>Diámetro</th>{% if not physical_week %}<th>Programa</th><th>Arrastre</th>{% endif %}<th>{% if physical_week %}Producido{% else %}Carga total{% endif %}</th><th>Límite semanal</th><th>Margen</th><th>Estado</th></tr></thead><tbody>
+<div class="table-wrap"><table><thead><tr><th>Diámetro</th><th>Programa</th><th>Arrastre</th><th>Carga total</th><th>Límite semanal</th><th>Margen</th><th>Estado</th></tr></thead><tbody>
 {% for r in capacities %}{% include 'operations/capacity_row.html' %}{% endfor %}</tbody>
 <tfoot>{% include 'operations/capacity_row.html' with r=plant %}{% if pool.limit != None and pool.limit > 0 %}{% include 'operations/capacity_row.html' with r=pool %}{% endif %}</tfoot></table></div>
 <small>Capacidad instalada de las máquinas en servicio: {{ installed|floatformat:"-3g" }} piezas semanales. 5/16 y 1/4 comparten una bolsa incluida en el total de planta.</small></section>
-{% if physical_week %}
-<section class="panel"><h2>Cierres de la semana física</h2><div class="table-wrap"><table><thead><tr><th>Fecha de cierre</th><th>Folio</th><th>Programa original</th><th>Parte</th><th>Cliente</th><th>Diámetro</th><th>Turno</th><th>Producido</th></tr></thead><tbody>
-{% for day,folio,program,part,customer,size,shift_label,qty in details %}
+{% if calendar_week %}
+<section class="panel" id="cierres-semana"><h2>Cierres de la semana física</h2><div class="table-wrap"><table><thead><tr><th>Día operativo</th><th>Folio</th><th>Programa original</th><th>Parte</th><th>Cliente</th><th>Diámetro</th><th>Turno</th><th>Producido</th></tr></thead><tbody>
+{% for day,folio,program,part,customer,size,shift_label,qty in closed_details %}
 <tr><td>{{ day|date:"d/m/Y" }}</td><td>{{ folio }}</td><td>{{ program|default:"—" }}</td><td>{{ part }}</td><td>{{ customer }}</td><td>{{ size }}</td><td>{{ shift_label|default:"—" }}</td><td>{{ qty|floatformat:"-3g" }}</td></tr>
 {% empty %}<tr><td colspan="8">Sin cierres en esta semana para la selección.</td></tr>{% endfor %}
 </tbody></table></div>
-{% else %}
+{% if closed_details.has_other_pages %}<nav class="cap-pages" aria-label="Páginas de cierres">{% if closed_details.has_previous %}<a href="?{{ params }}&amp;close_page={{ closed_details.previous_page_number }}#cierres-semana">Anterior</a>{% endif %} Página {{ closed_details.number }} de {{ closed_details.paginator.num_pages }} {% if closed_details.has_next %}<a href="?{{ params }}&amp;close_page={{ closed_details.next_page_number }}#cierres-semana">Siguiente</a>{% endif %}</nav>{% endif %}</section>
+{% endif %}
 <section class="panel"><h2>Órdenes del programa</h2><div class="table-wrap"><table><thead><tr><th>Folio</th><th>Parte</th><th>Cliente</th><th>Diámetro</th><th>Programado</th><th>Terminado</th><th>Pendiente</th></tr></thead><tbody>
 {% for folio,part,customer,size,qty,done,pending in details %}<tr><td>{{ folio }}</td><td>{{ part }}</td><td>{{ customer }}</td><td>{{ size }}</td><td>{{ qty|floatformat:"-3g" }}</td><td>{{ done|floatformat:"-3g" }}</td><td>{{ pending|floatformat:"-3g" }}</td></tr>{% empty %}<tr><td colspan="7">Sin órdenes para esta selección.</td></tr>{% endfor %}</tbody></table></div>
-{% endif %}
 {% if details.has_other_pages %}<nav class="cap-pages" aria-label="Páginas de órdenes">{% if details.has_previous %}<a href="?{{ params }}&amp;page={{ details.previous_page_number }}">Anterior</a>{% endif %} Página {{ details.number }} de {{ details.paginator.num_pages }} {% if details.has_next %}<a href="?{{ params }}&amp;page={{ details.next_page_number }}">Siguiente</a>{% endif %}</nav>{% endif %}</section>
 {% if calendar_week %}<section class="panel" id="equipos"><h2>Utilización por máquina</h2><p>Producción de todos los clientes según la fecha del cierre y las horas configuradas.</p>
 <form method="get" action="#equipos" class="cap-filters"><input type="hidden" name="week" value="{{ week }}"><input type="hidden" name="client" value="{{ client }}">
-<input type="hidden" name="week_mode" value="{% if physical_week %}physical{% else %}programmed{% endif %}">
 <input type="hidden" name="chart_machine" value="{{ chart_machine }}"><input type="hidden" name="chart_diameter" value="{{ chart_diameter }}">
 <label>Periodo<select name="day"><option value="">Semana completa</option>{% for d in dates %}<option value="{{ d|date:'Y-m-d' }}" {% if d|date:'Y-m-d' == day %}selected{% endif %}>{{ d|date:"l d/m" }}</option>{% endfor %}</select></label>
 <label>Turno<select name="shift"><option value="">Todos los turnos</option>{% for s in shifts %}<option {% if s == shift %}selected{% endif %}>{{ s }}</option>{% endfor %}</select></label><button>Ver utilización</button></form>
 <div class="table-wrap"><table><thead><tr><th>Máquina</th><th>Capacidad del periodo</th><th>Piezas producidas</th><th>Utilización</th></tr></thead><tbody>
 {% for code,target,qty,percent in machines %}<tr><th>{{ code }}</th><td>{% if target == None %}Sin configurar{% elif target == 0 %}Fuera de servicio{% else %}{{ target|floatformat:"-3g" }}{% endif %}</td><td>{{ qty|floatformat:"-3g" }}</td><td>{% if percent == None %}—{% else %}{{ percent|floatformat:1 }} %{% endif %}</td></tr>{% endfor %}</tbody></table></div></section>{% endif %}
 </div></div>
-<script defer src="{% static 'js/capacity-screen.js' %}?v=diameter-capacity-reference"></script>{% endblock %}
+<script defer src="{% static 'js/capacity-screen.js' %}?v=single-week-filter"></script>{% endblock %}

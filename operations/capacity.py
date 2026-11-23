@@ -138,7 +138,6 @@ def dashboard(request):
     snapshot_at = timezone.now()
     today = timezone.localdate(snapshot_at)
     current = today - timedelta(days=today.weekday())
-    physical = request.GET.get("week_mode") == "physical"
     orders = ProductionOrder.objects.exclude(status=ProductionOrder.Status.CANCELLED)
     periods = {current.isoformat(): (current, week_label(current))}
     # A legacy program may contain only S35. Anchor its year to the load date.
@@ -150,14 +149,12 @@ def dashboard(request):
         key = start.isoformat() if start else "program:" + program
         clients_by_period[key][str(cid or "none")] = customer or "Sin cliente"
         periods[key] = (start, week_label(start) if start else program or "Sin programa")
-    if physical:
-        periods = {key: value for key, value in periods.items() if value[0]}
-        closed_weeks = operational_closes(ProductionClose.objects.filter(closed_at__lt=snapshot_at)).annotate(
-            close_week=TruncWeek("operational_at", tzinfo=timezone.get_current_timezone())
-        ).order_by().values_list("close_week", flat=True).distinct()
-        for week in closed_weeks:
-            monday = timezone.localdate(week)
-            periods[monday.isoformat()] = (monday, week_label(monday))
+    closed_weeks = operational_closes(ProductionClose.objects.filter(closed_at__lt=snapshot_at)).annotate(
+        close_week=TruncWeek("operational_at", tzinfo=timezone.get_current_timezone())
+    ).order_by().values_list("close_week", flat=True).distinct()
+    for week in closed_weeks:
+        monday = timezone.localdate(week)
+        periods[monday.isoformat()] = (monday, week_label(monday))
     selected = request.GET.get("week", current.isoformat())
     if selected not in periods:
         selected = current.isoformat()
@@ -168,7 +165,6 @@ def dashboard(request):
         work_date__gte=start, work_date__lt=start + timedelta(days=7)
     ) if start else ProductionClose.objects.none()
     actual_by_diameter = defaultdict(Counter)
-    physical_load = Counter()
     produced_by_customer = Counter()
     closed_details = []
     close_date = "work_items__closes__closed_at"
@@ -184,7 +180,7 @@ def dashboard(request):
     ).annotate(**sums).order_by("part__client__name", "part__number", "id")
     client = request.GET.get("client", "")
     clients = clients_by_period[selected]
-    if physical:
+    if start:
         # Include customers who closed an older order during this week.
         physical_clients = runs.order_by().values_list(
             "work_item__order__part__client_id", "work_item__order__part__client__name"
@@ -195,7 +191,6 @@ def dashboard(request):
         client = ""
     details = []
     available_orders = []
-    selected_parts = {}
     by_customer = defaultdict(Progress)
     planned, carry = defaultdict(int), defaultdict(int)
     total = Progress()
@@ -222,29 +217,21 @@ def dashboard(request):
         clients[cid] = name
         if client and cid != client:
             continue
-        if start:
-            selected_parts[row["id"]] = size
         for group in (total, by_customer[cid]):
             group.add(qty, done, available)
         details.append((row["folio"], row["part__number"], name, size, qty, done, max(0, qty - done)))
-    if physical:
+    if start:
         for work_date, folio, program, part, cid, name, size, shift_label, quantity in physical_output(runs):
             size = diameter(size)
-            physical_load[size] += quantity
             cid = str(cid or "none")
             if client and cid != client:
                 continue
             produced_by_customer[cid] += quantity
             actual_by_diameter[size][work_date, output_shift(shift_label)] += quantity
             closed_details.append((work_date, folio, program, part, name or "Sin cliente", size, shift_label, quantity))
-        total.done = produced_by_customer.total()
-        planned, carry = physical_load, Counter()
-    customer_output = produced_by_customer if physical else Counter({
-        cid: progress.done for cid, progress in by_customer.items() if progress.done > 0
-    })
-    customer_output_total = customer_output.total()
+    customer_output_total = produced_by_customer.total()
     customer_slices = [(clients[cid], qty, 100 * qty / customer_output_total)
-                       for cid, qty in customer_output.most_common() if qty > 0]
+                       for cid, qty in produced_by_customer.most_common() if qty > 0]
     sizes = list(config.diameters) + sorted((planned.keys() | carry.keys()) - config.diameters.keys())
     rows = [capacity_row(s, config.diameters[s], planned[s], carry[s]) for s in sizes
             if s in config.diameters and config.diameters[s] is not None and config.diameters[s] > 0]
@@ -298,16 +285,9 @@ def dashboard(request):
         machine_series = weekly_series(dates, today, config.days, machine_output, machine_target, daily=True)
 
         diameter_output = Counter()
-        if physical:
-            for size, output_by_day in actual_by_diameter.items():
-                if not selected_sizes or size in selected_sizes:
-                    diameter_output.update(output_by_day)
-        else:
-            matching_orders = [order_id for order_id, size in selected_parts.items()
-                               if not selected_sizes or size in selected_sizes]
-            closes_by_shift = runs.filter(work_item__order_id__in=matching_orders)
-            for work_date, shift_label, quantity in closes_by_shift.values_list("work_date", "shift").annotate(qty=Sum("quantity")):
-                diameter_output[work_date, output_shift(shift_label)] += quantity
+        for size, output_by_day in actual_by_diameter.items():
+            if not selected_sizes or size in selected_sizes:
+                diameter_output.update(output_by_day)
         diameter_series = weekly_series(dates, today, config.days, diameter_output, diameter_limit, daily=True)
 
         if chosen_day:
@@ -343,11 +323,12 @@ def dashboard(request):
     ).order_by("-closed_at", "-pk")[:20]
     params = request.GET.copy()
     params.pop("page", None)
+    params.pop("close_page", None)
+    params.pop("week_mode", None)
     return render(request, "operations/capacity.html", {
         "weeks": [(k, f"{v[1]} · {v[0]:%d/%m/%Y}–{(v[0] + timedelta(days=6)):%d/%m/%Y}" if v[0] else v[1])
                   for k, v in sorted(periods.items(), key=lambda item: item[0], reverse=True)],
         "week": selected, "label": label, "calendar_week": bool(start), "clients": sorted(clients.items(), key=lambda item: item[1]),
-        "physical_week": physical,
         "week_monday": start, "week_sunday": dates[-1] if dates else None,
         "snapshot_at": snapshot_at,
         "client": client, "total": total,
@@ -361,7 +342,8 @@ def dashboard(request):
         "capacities": rows, "plant": plant, "pool": pool, "installed": installed,
         "recent_closes": recent_closes,
         "plant_gap": abs(plant["margin"]), "over_limits": [r["name"] for r in rows if r["over"]],
-        "details": Paginator(closed_details if physical else details, 30).get_page(request.GET.get("page")),
+        "details": Paginator(details, 30).get_page(request.GET.get("page")),
+        "closed_details": Paginator(closed_details, 30).get_page(request.GET.get("close_page")),
         "params": params.urlencode(),
         "machines": machine_rows, "weekly_machines": weekly_machines,
         "dates": dates, "day": day, "shifts": shift_options, "shift": shift,

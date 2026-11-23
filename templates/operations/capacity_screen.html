@@ -2,7 +2,7 @@
   <header class="cap-screen-head">
     <div><h1>Planeación y capacidad</h1>
       <div class="cap-screen-meta">
-        <p data-cap-period>{{ label }} · {% if physical_week %}Días operativos{% else %}Periodo{% endif %} del {{ week_monday|date:"d/m/Y" }} al {{ week_sunday|date:"d/m/Y" }}</p>
+        <p data-cap-period>{{ label }}{% if calendar_week %} · Días operativos del {{ week_monday|date:"d/m/Y" }} al {{ week_sunday|date:"d/m/Y" }}{% endif %}</p>
         <p class="cap-screen-freshness"><span data-cap-freshness>Consulta <time datetime="{{ snapshot_at|date:'c' }}">{{ snapshot_at|date:'d/m H:i:s' }}</time></span><span class="cap-refresh-cadence"> · Cada 45 s</span></p>
       </div>
     </div>
@@ -20,11 +20,6 @@
   <form id="capacity-filters" method="get" data-cap-filter></form>
   <div class="cap-screen-grid" data-cap-grid>
     <section class="cap-screen-card cap-week-filter">
-      <label for="cap-week-mode">Tipo de semana</label>
-      <select id="cap-week-mode" name="week_mode" form="capacity-filters" data-cap-chart-filter data-glide-skip>
-        <option value="programmed" {% if not physical_week %}selected{% endif %}>Semana programada</option>
-        <option value="physical" {% if physical_week %}selected{% endif %}>Semana física</option>
-      </select>
       <label for="cap-week">Semana</label>
       <select id="cap-week" name="week" form="capacity-filters" data-glide-skip>
         {% for key,name in weeks %}<option value="{{ key }}" {% if key == week %}selected{% endif %}>{{ name }}</option>{% endfor %}
@@ -38,17 +33,17 @@
         {% for id,name in clients %}<option value="{{ id }}" {% if id == client %}selected{% endif %}>{{ name }}</option>{% endfor %}
       </select>
     </section>
-    <section class="cap-kpis" aria-label="Resumen del programa" data-cap-kpis>
-      <article><span>{% if physical_week %}Programa asignado{% else %}Programado{% endif %}</span><strong>{{ total.planned|floatformat:"-3g" }}</strong></article>
-      <article><span>{% if physical_week %}Producido por cierre{% else %}Terminado{% endif %}</span><strong>{{ total.done|floatformat:"-3g" }}</strong></article>
-      <article><span>{% if physical_week %}Pendiente del programa{% else %}Pendiente{% endif %}</span><strong>{{ total.pending|floatformat:"-3g" }}</strong></article>
+    <section class="cap-kpis" aria-label="Resumen de la semana programada" data-cap-kpis>
+      <article><span>Programado</span><strong>{{ total.planned|floatformat:"-3g" }}</strong></article>
+      <article><span>Terminado</span><strong>{{ total.done|floatformat:"-3g" }}</strong></article>
+      <article><span>Pendiente</span><strong>{{ total.pending|floatformat:"-3g" }}</strong></article>
     </section>
     <section class="cap-screen-card cap-machine-capacity-card">
       <h2>Capacidad por máquina</h2>
       <div class="cap-capacity-summary" data-cap-capacity>
         <strong>{{ installed|floatformat:"-3g" }}</strong>
         <small>piezas/sem · Toda la planta</small>
-        <span class="{% if plant.over %}cap-over{% endif %}">{% if physical_week %}Prod.{% else %}Carga{% endif %} {{ plant.load|floatformat:"-3g" }}/{{ plant.limit|floatformat:"-3g" }}</span>
+        <span class="{% if plant.over %}cap-over{% endif %}">Carga {{ plant.load|floatformat:"-3g" }}/{{ plant.limit|floatformat:"-3g" }}</span>
         <span class="{% if plant.over %}cap-over{% endif %}">{% if plant.over %}Exceso{% else %}Margen{% endif %} {{ plant_gap|floatformat:"-3g" }}</span>
       </div>
       <div class="cap-machine-capacity" role="table" aria-label="Capacidad y utilización semanal por máquina">
@@ -76,7 +71,7 @@
       <h2>Capacidad por diámetro</h2>
       <div class="cap-machine-capacity" role="table" aria-label="Carga y límite semanal por diámetro">
         <div class="cap-diameter-capacity-head" role="row">
-          <span role="columnheader">Diámetro</span><span role="columnheader" data-cap-limit-label>{% if physical_week %}Producido{% else %}Carga{% endif %}</span><span role="columnheader">Límite</span>
+          <span role="columnheader">Diámetro</span><span role="columnheader">Carga</span><span role="columnheader">Límite</span>
         </div>
         <div class="cap-screen-list cap-machine-capacity-list" data-cap-list="diameter-capacity" role="rowgroup" tabindex="0">
           {% for row in capacities %}
@@ -89,7 +84,7 @@
     <div class="cap-clients">
       <section class="cap-screen-card cap-customer-pie" data-cap-customer-pie>
         <h2>Producción por cliente</h2>
-        <small>{% if physical_week %}Reparto de cierres de la semana física{% else %}Reparto de piezas terminadas del programa{% endif %}</small>
+        <small>Reparto de cierres de la semana física</small>
         {% if customer_slices %}
           <div class="cap-pie-content">
             <div class="cap-pie-plot" data-cap-pie-plot aria-hidden="true"></div>
@@ -113,7 +108,7 @@
     </div>
     <section class="cap-screen-card cap-machines">
       <div class="cap-chart-heading">
-        <div><h2>Eficiencia por máquina</h2><small>Piezas por día · Turno B antes de las 06:00 se asigna al día de inicio</small></div>
+        <div><h2>Eficiencia por máquina</h2><small>Semana física · Piezas por día operativo</small></div>
         <select aria-label="Máquina de la gráfica" name="chart_machine" form="capacity-filters" data-cap-chart-filter data-glide-skip>
           <option value="">Todas las máquinas</option>
           {% for name in machine_options %}<option value="{{ name }}" {% if name == chart_machine %}selected{% endif %}>{{ name }}</option>{% endfor %}
@@ -125,7 +120,7 @@
     </section>
     <section class="cap-screen-card cap-diameters">
       <div class="cap-chart-heading">
-        <div data-cap-diameter-title><h2>Eficiencia por diámetro</h2><small>Piezas por día · {% if physical_week %}Cierres del día operativo{% else %}Producción del programa seleccionado{% endif %}</small></div>
+        <div><h2>Eficiencia por diámetro</h2><small>Semana física · Piezas por día operativo</small></div>
         <select aria-label="Diámetro de la gráfica" name="chart_diameter" form="capacity-filters" data-cap-chart-filter data-glide-skip>
           <option value="">Todos los diámetros</option>
           {% for name in diameter_options %}<option value="{{ name }}" {% if name == chart_diameter %}selected{% endif %}>{{ name }}</option>{% endfor %}

@@ -103,23 +103,19 @@ def test_physical_week_uses_local_closure_dates_across_programs(client, planner)
         )
 
     url = reverse("capacity-dashboard")
-    response = client.get(url, {"week_mode": "physical", "week": monday.isoformat(), "chart_diameter": "1/2"})
+    response = client.get(url, {"week": monday.isoformat(), "chart_diameter": "1/2"})
     ctx = response.context
-    assert ctx["physical_week"] and ctx["week_monday"] == monday
+    assert 'name="week_mode"' not in response.content.decode()
+    assert ctx["week_monday"] == monday
     assert ctx["week_sunday"] == monday + timedelta(days=6)
-    assert (ctx["total"].planned, ctx["total"].done, ctx["total"].pending) == (2000, 600, 1700)
-    assert ctx["plant"]["load"] == 600
+    assert (ctx["total"].planned, ctx["total"].done, ctx["total"].pending) == (2000, 300, 1700)
     assert ctx["diameter_series"][0][1:] == (200, 3840, 200, 0, 0)
-    assert ctx["diameter_series"][-1][1:] == (600, 19200, 200, 400, 0)
-    assert [row[1] for row in ctx["details"]] == ["O-2", "O-1"]
-    assert (next_monday.date().isoformat(), "Semana 02 · 2026") in ctx["weeks"]
-    assert ("program:Orden especial anterior", "Orden especial anterior") not in ctx["weeks"]
+    assert ctx["diameter_series"][-1][1:] == (1200, 0, 0, 1200, 0)
+    assert [row[1] for row in ctx["closed_details"]] == ["O-2", "O-3", "O-1"]
 
-    filtered = client.get(url, {"week_mode": "physical", "week": monday.isoformat(), "client": beta.pk}).context
-    assert filtered["total"].done == 400
-    assert filtered["plant"]["load"] == 600
-    assert [row[1] for row in filtered["details"]] == ["O-2"]
-    assert client.get(url, {"week": monday.isoformat()}).context["total"].done == 300
+    filtered = client.get(url, {"week": monday.isoformat(), "client": beta.pk}).context
+    assert filtered["total"].done == 0
+    assert [row[1] for row in filtered["closed_details"]] == ["O-2", "O-3"]
 
 
 @pytest.mark.django_db
