@@ -1,7 +1,10 @@
 <section id="capacity-screen" class="cap-screen" aria-label="Pantalla de planeación">
   <header class="cap-screen-head">
-    <div><h1>Planeación y capacidad</h1><p data-cap-period>{{ label }} · {% if physical_week %}Días operativos{% else %}Periodo{% endif %} del {{ week_monday|date:"d/m/Y" }} al {{ week_sunday|date:"d/m/Y" }}</p>
-      <p class="cap-screen-freshness"><span data-cap-freshness>Consulta <time datetime="{{ snapshot_at|date:'c' }}">{{ snapshot_at|date:'d/m H:i:s' }}</time></span><span class="cap-refresh-cadence"> · Cada 45 s</span></p>
+    <div><h1>Planeación y capacidad</h1>
+      <div class="cap-screen-meta">
+        <p data-cap-period>{{ label }} · {% if physical_week %}Días operativos{% else %}Periodo{% endif %} del {{ week_monday|date:"d/m/Y" }} al {{ week_sunday|date:"d/m/Y" }}</p>
+        <p class="cap-screen-freshness"><span data-cap-freshness>Consulta <time datetime="{{ snapshot_at|date:'c' }}">{{ snapshot_at|date:'d/m H:i:s' }}</time></span><span class="cap-refresh-cadence"> · Cada 45 s</span></p>
+      </div>
     </div>
     <div class="cap-screen-actions">
       <label class="cap-chart-type" hidden>
@@ -40,15 +43,14 @@
       <article><span>{% if physical_week %}Producido por cierre{% else %}Terminado{% endif %}</span><strong>{{ total.done|floatformat:"-3g" }}</strong></article>
       <article><span>{% if physical_week %}Pendiente del programa{% else %}Pendiente{% endif %}</span><strong>{{ total.pending|floatformat:"-3g" }}</strong></article>
     </section>
-    <section class="cap-screen-card cap-machine-capacity-card" data-cap-pager>
-      <h2>Capacidad instalada</h2>
+    <section class="cap-screen-card cap-machine-capacity-card">
+      <h2>Capacidad por máquina</h2>
       <div class="cap-capacity-summary" data-cap-capacity>
         <strong>{{ installed|floatformat:"-3g" }}</strong>
         <small>piezas/sem · Toda la planta</small>
         <span class="{% if plant.over %}cap-over{% endif %}">{% if physical_week %}Prod.{% else %}Carga{% endif %} {{ plant.load|floatformat:"-3g" }}/{{ plant.limit|floatformat:"-3g" }}</span>
         <span class="{% if plant.over %}cap-over{% endif %}">{% if plant.over %}Exceso{% else %}Margen{% endif %} {{ plant_gap|floatformat:"-3g" }}</span>
       </div>
-      <h3 class="cap-capacity-table-title">Capacidad por máquina</h3>
       <div class="cap-machine-capacity" role="table" aria-label="Capacidad y utilización semanal por máquina">
         <div class="cap-machine-capacity-head" role="row">
           <span role="columnheader">Máquina</span><span role="columnheader">Cap.</span><span role="columnheader">Producido · uso · turnos</span>
@@ -68,34 +70,47 @@
         {% empty %}<div role="row"><span role="cell">Sin máquinas configuradas.</span></div>{% endfor %}
         </div>
       </div>
-      <button class="cap-page secondary" type="button" data-cap-next hidden></button>
       <a href="#capacidad">Ver detalle</a>
     </section>
-    <section class="cap-screen-card cap-diameter-capacity-card" data-cap-pager>
+    <section class="cap-screen-card cap-diameter-capacity-card">
       <h2>Capacidad por diámetro</h2>
       <div class="cap-machine-capacity" role="table" aria-label="Carga y límite semanal por diámetro">
         <div class="cap-diameter-capacity-head" role="row">
           <span role="columnheader">Diámetro</span><span role="columnheader" data-cap-limit-label>{% if physical_week %}Producido{% else %}Carga{% endif %}</span><span role="columnheader">Límite</span>
         </div>
-        <div class="cap-screen-list cap-machine-capacity-list" data-cap-list="diameter-capacity" role="rowgroup">
+        <div class="cap-screen-list cap-machine-capacity-list" data-cap-list="diameter-capacity" role="rowgroup" tabindex="0">
           {% for row in capacities %}
             {% if row.limit != None and row.limit > 0 %}{% include 'operations/capacity_diameter_row.html' %}{% endif %}
           {% endfor %}
           {% if pool.limit != None and pool.limit > 0 %}{% include 'operations/capacity_diameter_row.html' with row=pool %}{% endif %}
         </div>
       </div>
-      <button class="cap-page secondary" type="button" data-cap-next hidden></button>
     </section>
-    <section class="cap-screen-card cap-clients" data-cap-pager>
-      <div data-cap-customers-title>
-        {% if physical_week %}<h2>Producción por cliente</h2><small>Participación en la producción seleccionada</small>
-        {% else %}<h2>Avance por cliente</h2><small>Terminado / programado</small>{% endif %}
-      </div>
-      <div class="cap-screen-list" data-cap-list="clients">
-        {% for name,row in customers %}{% include 'operations/capacity_progress_bar.html' with name=name row=row %}{% empty %}<p>Sin órdenes para esta selección.</p>{% endfor %}
-      </div>
-      <button class="cap-page secondary" type="button" data-cap-next hidden></button>
-    </section>
+    <div class="cap-clients">
+      <section class="cap-screen-card cap-customer-pie" data-cap-customer-pie>
+        <h2>Producción por cliente</h2>
+        <small>{% if physical_week %}Reparto de cierres de la semana física{% else %}Reparto de piezas terminadas del programa{% endif %}</small>
+        {% if customer_slices %}
+          <div class="cap-pie-content">
+            <div class="cap-pie-plot" data-cap-pie-plot aria-hidden="true"></div>
+            <ul class="cap-pie-legend" aria-label="Participación de cada cliente en la producción">
+              {% for name,qty,percent in customer_slices %}
+                <li data-cap-pie-value="{{ percent|floatformat:'6u' }}">
+                  <b title="{{ name }}">{{ name }}</b><span title="{{ qty|floatformat:'-3g' }} piezas">{{ percent|floatformat:1 }} %</span>
+                </li>
+              {% endfor %}
+            </ul>
+          </div>
+        {% else %}<p>Sin piezas terminadas para esta selección.</p>{% endif %}
+      </section>
+      <section class="cap-screen-card cap-customer-progress">
+        <h2 id="cap-customer-progress-title">Avance por cliente</h2>
+        <small>Semana programada · Terminado / cargado</small>
+        <div class="cap-screen-list" data-cap-list="clients" role="region" aria-labelledby="cap-customer-progress-title" tabindex="0">
+          {% for name,row in programmed_customers %}{% include 'operations/capacity_progress_bar.html' with name=name row=row %}{% empty %}<p>Sin órdenes para esta selección.</p>{% endfor %}
+        </div>
+      </section>
+    </div>
     <section class="cap-screen-card cap-machines">
       <div class="cap-chart-heading">
         <div><h2>Eficiencia por máquina</h2><small>Piezas por día · Turno B antes de las 06:00 se asigna al día de inicio</small></div>
@@ -124,31 +139,44 @@
         {% endif %}
       </div>
     </section>
-    <section class="cap-screen-card cap-orders" data-cap-pager>
+    <section class="cap-screen-card cap-orders">
       <h2>Órdenes disponibles</h2>
-      <div class="cap-orders-total" data-cap-orders-total><strong>{{ total.available }}</strong><small>{% if physical_week %}Abiertas del programa de la semana{% else %}Abiertas con saldo para asignar{% endif %}</small></div>
-      <div class="cap-screen-list" data-cap-list="orders">
-        {% for folio,part,customer,qty in available_orders %}
-          <div class="cap-screen-row" data-cap-row>
-            <div class="cap-row-title"><b title="{{ part }}">{{ part }}</b><strong>{{ qty|floatformat:"-3g" }}</strong></div>
-            <small title="{{ folio }} · {{ customer }}">{{ folio }} · {{ customer }}</small>
-          </div>
-        {% empty %}<p>Sin órdenes disponibles.</p>{% endfor %}
+      <div class="cap-orders-total" data-cap-orders-total><strong>{{ available_orders|length }}</strong><small>Abiertas con saldo para asignar · Toda la planta</small></div>
+      <div class="cap-order-table" data-cap-order-table role="table" aria-label="Órdenes disponibles">
+        <div class="cap-order-columns cap-order-head" role="row">
+          <span role="columnheader">Parte</span><span role="columnheader">Cliente</span><span role="columnheader">Diámetro</span><span role="columnheader">Saldo</span>
+        </div>
+        <div class="cap-screen-list" data-cap-list="orders" role="rowgroup" tabindex="0">
+          {% for size,part,customer,qty in available_orders %}
+            <div class="cap-order-columns cap-order-row" data-cap-row role="row">
+              <b title="{{ part }}" role="cell">{{ part }}</b>
+              <span title="{{ customer }}" role="cell">{{ customer }}</span>
+              <span title="{{ size }}" role="cell">{{ size }}</span>
+              <strong role="cell">{{ qty|floatformat:"-3g" }}</strong>
+            </div>
+          {% empty %}<div role="row"><span role="cell" aria-colspan="4">Sin órdenes disponibles.</span></div>{% endfor %}
+        </div>
       </div>
-      <button class="cap-page secondary" type="button" data-cap-next hidden></button>
     </section>
-    <section class="cap-screen-card cap-recent" data-cap-pager>
-      <div class="cap-card-heading"><h2>Cierres recientes</h2><small>Últimos cierres registrados</small></div>
-      <div class="cap-screen-list" data-cap-list="recent-closes">
-        {% for close in recent_closes %}
-          <div class="cap-screen-row cap-close-row" data-cap-row>
-            <time>{{ close.closed_at|date:"d/m H:i" }}</time>
-            <div class="cap-close-details"><b title="{{ close.work_item.order.part_display }}">{{ close.work_item.order.part_display }}</b><small>{{ close.work_item.order.program|default:"Sin programa" }} · {{ close.work_item.machine.code }} · {{ close.shift|default:"Sin turno" }}</small></div>
-            <strong>+{{ close.quantity|floatformat:"-3g" }}</strong>
-          </div>
-        {% empty %}<p>Sin cierres registrados.</p>{% endfor %}
+    <section class="cap-screen-card cap-recent">
+      <div class="cap-card-heading"><h2>Cierres recientes</h2><small>Toda la planta</small></div>
+      <div class="cap-order-table" role="table" aria-label="Cierres recientes">
+        <div class="cap-order-columns cap-close-columns cap-order-head" role="row">
+          <span role="columnheader">Fecha y hora</span><span role="columnheader">Parte</span><span role="columnheader">Programa</span><span role="columnheader">Máquina</span><span role="columnheader">Turno</span><span role="columnheader">Piezas</span>
+        </div>
+        <div class="cap-screen-list" data-cap-list="recent-closes" role="rowgroup" tabindex="0">
+          {% for close in recent_closes %}
+            <div class="cap-order-columns cap-close-columns cap-order-row" data-cap-row role="row">
+              <span role="cell"><time datetime="{{ close.closed_at|date:'c' }}">{{ close.closed_at|date:"d/m H:i" }}</time></span>
+              <b title="{{ close.work_item.order.part_display }}" role="cell">{{ close.work_item.order.part_display }}</b>
+              <span title="{{ close.work_item.order.program|default:'Sin programa' }}" role="cell">{{ close.work_item.order.program|default:"—" }}</span>
+              <span title="{{ close.work_item.machine.code }}" role="cell">{{ close.work_item.machine.code }}</span>
+              <span title="{{ close.shift|default:'Sin turno' }}" role="cell">{{ close.shift|default:"—" }}</span>
+              <strong role="cell">+{{ close.quantity|floatformat:"-3g" }}</strong>
+            </div>
+          {% empty %}<div role="row"><span role="cell" aria-colspan="6">Sin cierres registrados.</span></div>{% endfor %}
+        </div>
       </div>
-      <button class="cap-page secondary" type="button" data-cap-next hidden></button>
     </section>
   </div>
   <p class="cap-screen-status" data-cap-status role="status"></p>

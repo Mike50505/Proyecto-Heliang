@@ -97,7 +97,7 @@ html[data-theme="dark"] .cap-screen {--tv-shift-b:#c5affb}
 .cap-week-filter label,.cap-client-filter label {font-weight:700}
 .cap-machine-capacity-card {grid-area:machine-capacity}
 .cap-diameter-capacity-card {grid-area:diameter-capacity}
-.cap-clients {grid-area:clients}
+.cap-clients {grid-area:clients;display:grid;grid-template-rows:repeat(2,minmax(0,1fr));gap:inherit;min-width:0;min-height:0}
 .cap-machines {grid-area:machines}
 .cap-diameters {grid-area:diameters}
 .cap-orders {grid-area:orders}
@@ -108,7 +108,7 @@ html[data-theme="dark"] .cap-screen {--tv-shift-b:#c5affb}
   padding:clamp(.52rem,.85vw,1.2rem);
 }
 .cap-screen-card.cap-week-filter {border-top:3px solid var(--tv-blue)}
-.cap-screen-card:is(.cap-client-filter,.cap-clients) {border-top:3px solid var(--tv-green)}
+.cap-screen-card:is(.cap-client-filter,.cap-customer-pie,.cap-customer-progress) {border-top:3px solid var(--tv-green)}
 .cap-screen-card.cap-machine-capacity-card {border-top:3px solid var(--tv-blue)}
 .cap-screen-card.cap-diameter-capacity-card {border-top:3px solid var(--tv-green)}
 .cap-screen-card.cap-orders {border-top:3px solid var(--tv-amber)}
@@ -116,13 +116,13 @@ html[data-theme="dark"] .cap-screen {--tv-shift-b:#c5affb}
 .cap-screen-card h2 {font-size:clamp(.94rem,1.3vw,1.75rem);margin:0;line-height:1.15;color:inherit}
 .cap-screen-card small {color:var(--tv-muted);font-size:.78em}
 .cap-capacity-summary {display:flex;align-items:baseline;flex-wrap:wrap;gap:.08em .45em;margin-top:.22em}
-.cap-orders-total {display:grid;gap:.22em;margin-top:.4em}
-.cap-orders-total strong {font-size:clamp(1.35rem,2.1vw,2.75rem);line-height:1.1}
+.cap-orders-total {display:flex;align-items:baseline;gap:.4em;margin-top:.15em}
+.cap-orders-total strong {font-size:1em;line-height:1.1}
 .cap-capacity-summary strong {font-size:1.02em;line-height:1.05}
 .cap-capacity-summary small,.cap-capacity-summary span {font-size:.68em;line-height:1.1;white-space:nowrap}
 .cap-machine-capacity-card a {color:var(--tv-blue);font-size:.8em;margin-top:.4em}
 .cap-capacity-group,.cap-machine-capacity {display:flex;flex-direction:column;min-height:0}
-.cap-screen .cap-capacity-table-title {font-size:.82em;margin:.55em 0 .14em;color:var(--tv-blue);line-height:1.2}
+.cap-machine-capacity-card .cap-machine-capacity {margin-top:.2em}
 .cap-machine-capacity-head,.cap-screen .cap-machine-capacity-row,
 .cap-diameter-capacity-head,.cap-screen .cap-diameter-capacity-row {
   display:grid;
@@ -155,13 +155,28 @@ html[data-theme="dark"] .cap-screen {--tv-shift-b:#c5affb}
 .cap-machine-capacity-card abbr {text-decoration:none}
 .cap-screen .cap-machine-capacity-list {margin-top:0}
 .cap-card-heading {display:flex;align-items:baseline;justify-content:space-between;gap:.5em}
-.cap-screen .cap-close-row {grid-template-columns:auto minmax(0,1fr) auto;align-items:center;gap:.45em}
-.cap-close-row time {font-size:.74em;color:var(--tv-muted);white-space:nowrap}
-.cap-close-details {display:grid;min-width:0;gap:.12em}
-.cap-close-details b,.cap-close-details small {overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
-.cap-close-details b {font-size:.84em}
-.cap-close-row>strong {color:var(--tv-green);font-size:.86em;white-space:nowrap}
 .cap-orders-total strong {color:var(--tv-amber)}
+.cap-order-table {display:flex;flex-direction:column;flex:1;min-height:0;margin-top:.25em}
+.cap-order-table .cap-screen-list {margin-top:0}
+.cap-order-columns {
+  display:grid;grid-template-columns:minmax(0,1.4fr) minmax(0,1.2fr) minmax(0,.8fr) minmax(0,.7fr);
+  align-items:center;gap:.45em;padding:.2em .25em;border-bottom:1px solid var(--tv-line);
+  font-size:.8em;line-height:1.12;
+}
+.cap-close-columns {
+  grid-template-columns:minmax(0,1.1fr) minmax(0,1.5fr) minmax(0,1fr) minmax(0,1fr) minmax(0,.65fr) minmax(0,.65fr);
+}
+.cap-order-columns>* {overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.cap-order-columns>:last-child {text-align:right}
+.cap-order-head {color:var(--tv-muted);font-weight:700}
+.cap-order-row strong {color:var(--tv-green)}
+.cap-pie-content {display:grid;grid-template-columns:minmax(0,.75fr) minmax(0,1fr);align-items:center;gap:.4em;flex:1;min-height:0;margin-top:.35em}
+.cap-pie-plot {width:100%;max-width:9rem;aspect-ratio:1;border-radius:50%;justify-self:center}
+.cap-pie-legend {list-style:none;margin:0;padding:0;min-height:0;max-height:100%;overflow:auto;font-size:.75em}
+.cap-pie-legend li {display:grid;grid-template-columns:.6em minmax(0,1fr) auto;align-items:center;gap:.3em;padding:.15em 0}
+.cap-pie-legend li::before {content:"";width:.55em;height:.55em;border-radius:50%;background:var(--slice-color,var(--tv-green))}
+.cap-pie-legend b {overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.cap-pie-legend span {white-space:nowrap}
 .cap-chart-content {flex:1;display:flex;flex-direction:column;min-height:0}
 .cap-chart-heading {display:flex;justify-content:space-between;align-items:center;gap:.5rem;min-width:0}
 #capacity-screen .cap-chart-heading select {width:min(42%,15rem)}
@@ -181,6 +196,13 @@ html[data-theme="dark"] .cap-screen {--tv-shift-b:#c5affb}
 .cap-screen[data-chart-type="bars"] .cap-series-total {display:none}
 .cap-chart-legend small {font-size:1em}
 .cap-screen-list {margin-top:.4em}
+.cap-screen :is(.cap-screen-list,.cap-pie-legend) {
+  scrollbar-width:thin;
+  scrollbar-color:color-mix(in srgb,var(--tv-muted) 32%,transparent) transparent;
+}
+.cap-screen :is(.cap-screen-list,.cap-pie-legend):is(:hover,:focus-within) {
+  scrollbar-color:var(--tv-muted) transparent;
+}
 .cap-screen:not(:fullscreen) .cap-screen-list {max-height:30rem;overflow:auto}
 .cap-line-chart {position:relative;flex:1;min-height:12rem;margin-top:.3em}
 .cap-line-chart canvas {position:absolute;inset:0;width:100%;height:100%}
@@ -208,7 +230,6 @@ html[data-theme="dark"] .cap-screen {--tv-shift-b:#c5affb}
 .cap-screen-row progress::-webkit-progress-value {background:var(--bar-color,var(--tv-green))}
 .cap-screen-row progress::-moz-progress-bar {background:var(--bar-color,var(--tv-green))}
 .cap-screen .cap-over {color:var(--tv-red)}
-#capacity-screen .cap-page {font-size:.77em;margin-top:.35em;align-self:flex-end;color:var(--h-ink);background:var(--h-subtle);min-height:2em;padding:.25em .6em}
 .cap-screen-status:empty {display:none}
 .cap-screen:fullscreen {
   width:100vw;height:100dvh;overflow:hidden;border-radius:0;
@@ -217,18 +238,27 @@ html[data-theme="dark"] .cap-screen {--tv-shift-b:#c5affb}
   font-size:var(--cap-tv-font);gap:1vh;
 }
 .cap-screen:fullscreen::backdrop {background:var(--tv-bg)}
+.cap-screen:fullscreen .cap-screen-head {gap:.35em .75em}
+.cap-screen:fullscreen .cap-screen-head h1 {font-size:1.45em;line-height:1.05}
+.cap-screen:fullscreen .cap-screen-meta {display:flex;flex-wrap:wrap;align-items:baseline;gap:0 .8em;font-size:.82em;line-height:1.15}
+.cap-screen:fullscreen .cap-screen-freshness {font-size:inherit}
+.cap-screen:fullscreen .cap-screen-actions {gap:.35em}
+.cap-screen:fullscreen .cap-screen-actions :is(select,button) {min-height:1.85em;padding:.2em .55em;font-size:.85em}
 .cap-screen:fullscreen .cap-screen-actions a,.cap-screen:fullscreen .cap-machine-capacity-card a {display:none}
 .cap-screen:fullscreen .cap-screen-grid {min-height:0;grid-template-rows:minmax(0,.9fr) repeat(2,minmax(0,1fr));gap:clamp(4px,1vh,16px)}
 .cap-screen:fullscreen .cap-screen-card {overflow:hidden;padding:.5em .65em}
 .cap-screen:fullscreen .cap-screen-card h2 {font-size:1.13em}
-.cap-screen:fullscreen .cap-screen-list {min-height:0;flex:1;overflow:hidden}
+.cap-screen:fullscreen .cap-screen-list {min-height:0;flex:1;overflow-y:auto;overscroll-behavior-y:contain}
 .cap-screen:fullscreen .cap-screen-row {height:clamp(3.55em,5.55vh,5.8rem);padding:.3em 0}
-.cap-screen:fullscreen .cap-orders .cap-screen-row {height:clamp(2.85em,4.7vh,5rem)}
-.cap-screen:fullscreen .cap-close-row {height:clamp(2.5em,3.4vh,3rem);padding:.2em 0}
+.cap-screen:fullscreen .cap-customer-progress .cap-screen-row {height:3.5em;padding:.18em 0;font-size:.76em}
+.cap-screen .cap-customer-progress .cap-screen-list {min-height:0;overflow-y:auto;overscroll-behavior-y:contain}
+.cap-screen:fullscreen .cap-pie-content {container-type:size}
+.cap-screen:fullscreen .cap-pie-plot {width:min(100%,100cqh)}
+.cap-screen:fullscreen .cap-order-columns {font-size:.77em;padding:.18em .25em}
 .cap-screen:fullscreen :is(.cap-machine-capacity-row,.cap-diameter-capacity-row) {height:1.6em;padding:.1em 0}
 .cap-screen:fullscreen :is(.cap-machine-capacity-row,.cap-diameter-capacity-row) {font-size:.68em}
 .cap-screen:fullscreen .cap-machine-capacity-head,.cap-screen:fullscreen .cap-diameter-capacity-head {font-size:.62em}
-.cap-screen:fullscreen .cap-machine-capacity-row {height:1.7em;padding:0}
+.cap-screen:fullscreen .cap-machine-capacity-row {height:auto;min-height:1.65em;padding:0;gap:.15em}
 .cap-screen:fullscreen .cap-machine-capacity-list {flex:0 1 auto}
 @media(max-width:900px) {
   .cap-screen:not(:fullscreen) .cap-screen-grid {

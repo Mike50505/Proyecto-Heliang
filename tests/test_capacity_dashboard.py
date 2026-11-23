@@ -68,7 +68,11 @@ def test_capacity_with_carry_and_client_filter(client, planner):
     assert ctx["diameter_series"][0] == (monday, 500, 2000, 500, 0, 0)
     assert ctx["diameter_series"][-1][1:] == (8000, 10000, 5000, 2500, 500)
     assert ctx["machine_other_output"] and ctx["diameter_other_output"]
-    assert ctx["available_orders"] == [("new", "A-1", "Alpha", 10000)]
+    assert ctx["available_orders"] == [
+        ("1/2", "A-1", "Alpha", 6000),
+        ("1/2", "A-1", "Alpha", 10000),
+        ("1/2", "B-1", "Beta", 5200),
+    ]
 
 
 @pytest.mark.django_db

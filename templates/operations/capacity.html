@@ -1,6 +1,6 @@
 {% extends 'base.html' %}{% load static %}
 {% block title %}Planeación y capacidad · MESA{% endblock %}
-{% block page_styles %}<link rel="stylesheet" href="{% static 'css/capacity.css' %}?v=diameter-daily-limit">{% endblock %}
+{% block page_styles %}<link rel="stylesheet" href="{% static 'css/capacity.css' %}?v=thin-scrollbars">{% endblock %}
 {% block content %}
 <div class="capacity-board">
 {% include 'operations/capacity_screen.html' %}
@@ -32,4 +32,4 @@
 <div class="table-wrap"><table><thead><tr><th>Máquina</th><th>Capacidad del periodo</th><th>Piezas producidas</th><th>Utilización</th></tr></thead><tbody>
 {% for code,target,qty,percent in machines %}<tr><th>{{ code }}</th><td>{% if target == None %}Sin configurar{% elif target == 0 %}Fuera de servicio{% else %}{{ target|floatformat:"-3g" }}{% endif %}</td><td>{{ qty|floatformat:"-3g" }}</td><td>{% if percent == None %}—{% else %}{{ percent|floatformat:1 }} %{% endif %}</td></tr>{% endfor %}</tbody></table></div></section>{% endif %}
 </div></div>
-<script defer src="{% static 'js/capacity-screen.js' %}?v=diameter-daily-limit"></script>{% endblock %}
+<script defer src="{% static 'js/capacity-screen.js' %}?v=tv-list-scroll"></script>{% endblock %}

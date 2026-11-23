@@ -177,7 +177,8 @@ def dashboard(request):
         sums["prior"] = Sum("work_items__closes__quantity", filter=Q(**{close_date + "__lt": min(midnight(start), cutoff)}))
     records = orders.annotate(loaded=TruncDate("created_at")).values(
         "id", "program", "loaded", "quantity", "status", "remaining_quantity", "folio",
-        "part__number", "part__client_id", "part__client__name", "part__diameter"
+        "part__number", "part__client_id", "part__client__name", "part__diameter",
+        "part__sample_base__diameter",
     ).annotate(**sums).order_by("part__client__name", "part__number", "id")
     client = request.GET.get("client", "")
     clients = clients_by_period[selected]
@@ -197,9 +198,14 @@ def dashboard(request):
     planned, carry = defaultdict(int), defaultdict(int)
     total = Progress()
     for row in records.iterator():
+        name = row["part__client__name"] or "Sin cliente"
+        size = diameter(row["part__diameter"])
+        available = row["status"] == ProductionOrder.Status.OPEN and row["remaining_quantity"] > 0
+        if available:
+            order_diameter = diameter(row["part__diameter"].strip() or row["part__sample_base__diameter"])
+            available_orders.append((order_diameter, row["part__number"], name, row["remaining_quantity"]))
         order_start = week_start(row["program"], row["loaded"])
         key = order_start.isoformat() if order_start else "program:" + row["program"]
-        size = diameter(row["part__diameter"])
         qty = row["quantity"]
         if key != selected:
             if start and order_start and order_start < start:
@@ -208,13 +214,9 @@ def dashboard(request):
         done = row["done"] or 0
         planned[size] += qty
         cid = str(row["part__client_id"] or "none")
-        name = row["part__client__name"] or "Sin cliente"
         clients[cid] = name
         if client and cid != client:
             continue
-        available = row["status"] == ProductionOrder.Status.OPEN and row["remaining_quantity"] > 0
-        if available:
-            available_orders.append((row["folio"], row["part__number"], name, row["remaining_quantity"]))
         if start:
             selected_parts[row["id"]] = size
         for group in (total, by_customer[cid], by_diameter[size]):
@@ -231,9 +233,13 @@ def dashboard(request):
             actual_by_diameter[size][work_date, output_shift(shift_label)] += quantity
             closed_details.append((work_date, folio, program, part, name or "Sin cliente", size, shift_label, quantity))
         total.done = produced_by_customer.total()
-        # The customer bar in physical mode shows share of selected production.
-        by_customer = {cid: Progress(planned=total.done, done=qty) for cid, qty in produced_by_customer.items()}
         planned, carry = physical_load, Counter()
+    customer_output = produced_by_customer if physical else Counter({
+        cid: progress.done for cid, progress in by_customer.items() if progress.done > 0
+    })
+    customer_output_total = customer_output.total()
+    customer_slices = [(clients[cid], qty, 100 * qty / customer_output_total)
+                       for cid, qty in customer_output.most_common() if qty > 0]
     sizes = list(config.diameters) + sorted((planned.keys() | carry.keys()) - config.diameters.keys())
     rows = [capacity_row(s, config.diameters[s], planned[s], carry[s]) for s in sizes
             if s in config.diameters and config.diameters[s] is not None and config.diameters[s] > 0]
@@ -336,9 +342,9 @@ def dashboard(request):
         for (_, shift_key), quantity in daily_output.items():
             by_shift[shift_key] += quantity
         weekly_machines.append((code, limit, produced, used, by_shift["a"], by_shift["b"], by_shift["other"]))
-    recent_closes = ProductionClose.objects.select_related(
+    recent_closes = ProductionClose.objects.filter(closed_at__lt=snapshot_at).select_related(
         "work_item__order__part", "work_item__machine"
-    ).order_by("-closed_at")[:20]
+    ).order_by("-closed_at", "-pk")[:20]
     params = request.GET.copy()
     params.pop("page", None)
     return render(request, "operations/capacity.html", {
@@ -348,7 +354,9 @@ def dashboard(request):
         "physical_week": physical,
         "week_monday": start, "week_sunday": dates[-1] if dates else None,
         "snapshot_at": snapshot_at,
-        "client": client, "total": total, "customers": [(clients[k], v) for k, v in by_customer.items()],
+        "client": client, "total": total,
+        "programmed_customers": [(clients[cid], progress) for cid, progress in by_customer.items()],
+        "customer_slices": customer_slices,
         "available_orders": available_orders,
         "machine_series": machine_series, "machine_options": machine_options, "chart_machine": machine_code,
         "diameter_series": diameter_series, "diameter_options": diameter_options, "chart_diameter": chart_diameter,

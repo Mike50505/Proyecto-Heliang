@@ -7,7 +7,6 @@
   const chartType = screen.querySelector('[data-cap-chart-type]');
   const chartPreferenceKey = 'mesa-capacity-chart-type';
   const isFullscreen = () => document.fullscreenElement === screen;
-  let pages = [];
   let pendingRequest;
 
   function drawWeeklyChart(canvas) {
@@ -164,6 +163,23 @@
   function drawCharts() {
     screen.dataset.chartType = chartType.value;
     screen.querySelectorAll('[data-cap-line]').forEach(drawWeeklyChart);
+    const pie = screen.querySelector('[data-cap-pie-plot]');
+    if (!pie) return;
+    const legend = [...pie.parentElement.querySelectorAll('[data-cap-pie-value]')];
+    const values = legend.map(item => Number(item.dataset.capPieValue));
+    const total = values.reduce((sum, value) => sum + value, 0);
+    if (!total) return;
+    let end = 0;
+    const slices = values.map((value, index) => {
+      const start = end;
+      end += value / total * 100;
+      const color = `hsl(${(index * 137.5 + 155) % 360} 66% 52%)`;
+      legend[index].style.setProperty('--slice-color', color);
+      return `${color} ${start}% ${index === values.length - 1 ? 100 : end}%`;
+    });
+    pie.style.background = slices.length === 1
+      ? legend[0].style.getPropertyValue('--slice-color')
+      : `conic-gradient(${slices.join(',')})`;
   }
 
   try {
@@ -183,44 +199,11 @@
 
   new ResizeObserver(drawCharts).observe(screen.querySelector('[data-cap-grid]'));
   new MutationObserver(() => {
-    requestAnimationFrame(() => {
-      fitRows();
-      drawCharts();
-    });
+    requestAnimationFrame(drawCharts);
   }).observe(document.documentElement, {
     attributes: true,
     attributeFilter: ['data-palette'],
   });
-
-  function showPage(page, index) {
-    page.index = index % page.count;
-    page.rows.forEach((row, i) => {
-      row.hidden = Math.floor(i / page.size) !== page.index;
-    });
-    page.button.hidden = page.count <= 1;
-    page.button.textContent = `Página ${page.index + 1} de ${page.count} · Siguiente`;
-  }
-
-  function fitRows() {
-    pages = [...screen.querySelectorAll('[data-cap-pager]')].map((card, index) => {
-      const list = card.querySelector('[data-cap-list]');
-      if (!list) return null;
-      const rows = [...list.querySelectorAll('[data-cap-row]')];
-      const button = card.querySelector('[data-cap-next]');
-      rows.forEach(row => { row.hidden = false; });
-      button.hidden = true;
-      if (!isFullscreen() || !rows.length) return null;
-      const height = rows[0].getBoundingClientRect().height;
-      let size = Math.max(1, Math.floor((list.clientHeight + 1) / height));
-      if (size < rows.length) {
-        button.hidden = false;
-        size = Math.max(1, Math.floor((list.clientHeight + 1) / height));
-      }
-      const page = { rows, button, size, count: Math.ceil(rows.length / size) };
-      showPage(page, pages[index]?.index || 0);
-      return page;
-    });
-  }
 
   if (document.fullscreenEnabled) {
     toggle.hidden = false;
@@ -234,15 +217,9 @@
     });
     document.addEventListener('fullscreenchange', () => {
       toggle.textContent = isFullscreen() ? 'Salir de pantalla completa' : 'Pantalla completa';
-      requestAnimationFrame(fitRows);
+      requestAnimationFrame(drawCharts);
     });
-    window.addEventListener('resize', fitRows);
   }
-
-  screen.addEventListener('click', event => {
-    const page = pages.find(item => item?.button === event.target);
-    if (page) showPage(page, page.index + 1);
-  });
 
   async function update(url, filterChanged) {
     pendingRequest?.abort();
@@ -258,8 +235,8 @@
         '[data-cap-period]', '[data-cap-freshness]', '[data-cap-kpis]', '[data-cap-capacity]',
         '[data-cap-list="machine-capacity"]', '[data-cap-list="diameter-capacity"]', '[data-cap-limit-label]',
         '[data-cap-list="recent-closes"]',
-        '[data-cap-customers-title]', '[data-cap-diameter-title]',
-        '[data-cap-list="clients"]', '[data-cap-list="orders"]', '[data-cap-orders-total]',
+        '[data-cap-customer-pie]', '[data-cap-diameter-title]',
+        '[data-cap-list="clients"]', '[data-cap-order-table]', '[data-cap-orders-total]',
         '[data-cap-series="machine"]', '[data-cap-series="diameter"]', '[data-cap-details]',
       ];
       if (filterChanged || document.activeElement?.form !== form) {
@@ -275,14 +252,16 @@
       }
       for (const [current, incoming] of fragments) {
         const selectedValue = incoming.value;
+        const list = current.matches('[data-cap-list]') ? current : current.querySelector('[data-cap-list]');
+        const scrollTop = list?.scrollTop;
         current.replaceChildren(...incoming.childNodes);
         if (current instanceof HTMLSelectElement) current.value = selectedValue;
+        const updatedList = list === current ? current : current.querySelector('[data-cap-list]');
+        if (updatedList && scrollTop !== undefined) updatedList.scrollTop = scrollTop;
       }
       if (filterChanged) {
         history.replaceState(null, '', url);
-        pages = [];
       }
-      fitRows();
       drawCharts();
       status.textContent = '';
     } catch {
@@ -327,13 +306,6 @@
     url.search = new URLSearchParams(new FormData(form));
     update(url, true);
   });
-
-  setInterval(() => {
-    if (!isFullscreen()) return;
-    for (const page of pages) {
-      if (page?.count > 1 && page.button !== document.activeElement) showPage(page, page.index + 1);
-    }
-  }, 20000);
 
   setInterval(() => {
     if (isFullscreen() && !pendingRequest) update(location.href, false);
