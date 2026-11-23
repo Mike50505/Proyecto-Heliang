@@ -50,5 +50,7 @@ def diameter_category_sort_key(category):
     if not match:
         return (1, category.casefold())
     whole, numerator, denominator = match.groups()
+    if int(denominator) == 0:
+        return (1, category.casefold())
     numeric = Decimal(int(whole or 0)) + (Decimal(int(numerator)) / Decimal(int(denominator)))
     return (0, numeric)

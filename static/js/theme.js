@@ -11,6 +11,7 @@
     ivory: {theme:'light', copy:'Fondos cálidos y acentos azul grisáceo, sin blanco puro.'},
     sage: {theme:'light', copy:'Verdes tenues con acentos azul petróleo y superficies suaves.'},
     slate: {theme:'dark', copy:'Azul grisáceo oscuro, con texto suave y sin fondo negro puro.'},
+    dashboard: {theme:'dark', copy:'Azul profundo con los acentos de los dashboards de MESA.'},
     night: {theme:'dark', copy:'El modo oscuro original de MESA, sobre fondo negro.'},
   };
   const store = {

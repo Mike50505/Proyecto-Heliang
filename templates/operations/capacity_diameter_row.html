@@ -1,0 +1,5 @@
+<div class="cap-screen-row cap-diameter-capacity-row{% if row.over %} cap-over{% endif %}" data-cap-row role="row">
+  <b role="rowheader" title="{{ row.name }}">{{ row.name }}</b>
+  <span role="cell">{{ row.load|floatformat:"-3g" }}{% if row.over %}<span class="cap-sr"> (Excede el límite)</span>{% endif %}</span>
+  <span role="cell">{{ row.limit|floatformat:"-3g" }}</span>
+</div>

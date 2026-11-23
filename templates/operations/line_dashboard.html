@@ -16,7 +16,8 @@
   <link rel="stylesheet" href="{% static 'mesa/mesa-tokens.css' %}?v=20261012-3">
   <link rel="stylesheet" href="{% static 'mesa/mesa-effects.css' %}?v=20261012-3">
   <link rel="stylesheet" href="{% static 'css/heiliang-experience.css' %}?v=20261012-3">
-  <link rel="stylesheet" href="{% static 'css/heiliang-palettes.css' %}?v=20261012-3">
+  <link rel="stylesheet" href="{% static 'css/heiliang-palettes.css' %}?v=shared-theme">
+  <link rel="stylesheet" href="{% static 'css/dashboard-tv.css' %}?v=shared-theme">
 </head>
 <body class="line-page">
   <canvas class="particle-background" data-particle-background aria-hidden="true"></canvas>
@@ -25,7 +26,7 @@
     <div class="line-title"><b>ESTADO DE LA LÍNEA</b><small>Máquinas automáticas</small></div>
     <button id="open-progress-screen" class="analytics-screen-button" type="button" disabled><span class="analytics-icon" aria-hidden="true">▥</span><span class="analytics-copy"><b>GRÁFICAS DE AVANCE</b><small>Abrir en pantalla completa</small></span><span class="analytics-arrow" aria-hidden="true">→</span></button>
     <div class="line-clock"><b id="clock">{{ now|date:'H:i:s' }}</b><small>{{ now|date:'d/m/Y' }} · Actualiza en <span id="countdown">30</span>s</small></div>
-    <button id="fullscreen-toggle" class="fullscreen-toggle" type="button" title="Mostrar tablero en pantalla completa" aria-label="Mostrar tablero en pantalla completa"><span aria-hidden="true">⛶</span><b>Pantalla completa</b></button>
+    <button id="fullscreen-toggle" class="fullscreen-toggle secondary" type="button" title="Mostrar tablero en pantalla completa" aria-label="Mostrar tablero en pantalla completa"><span aria-hidden="true">⛶</span><b>Pantalla completa</b></button>
   </header>
   <iframe id="progress-screen-frame" class="progress-screen-frame" src="{% url 'progress-dashboard' %}" title="Gráficas de avance" allowfullscreen></iframe>
   <main>
@@ -46,17 +47,18 @@
         <div class="utilization-wrap"><div class="utilization-donut" style="--value:{{ utilization_degrees }}deg"><div><b>{{ utilization }}%</b><span>máquinas activas</span></div></div></div>
         <div class="order-legend"><div><b>{{ active_count }}</b><small>Activas</small></div><div><b>{{ available_count }}</b><small>Libres</small></div><div><b>{{ total_machines }}</b><small>Total</small></div></div>
       </article>
-      <article class="analytics-card production-machine-card">
+      <article class="analytics-card production-machine-card" data-tv-pages="output" data-tv-items=".compact-row">
         <div class="analytics-title"><h2>Producción por máquina</h2><small>Hoy</small></div>
-        <div class="compact-bars">{% for row in machine_output %}<div class="compact-row"><label><b>{{ row.work_item__machine__code }}</b><span>{{ row.total|floatformat:"-2" }}</span></label><span class="compact-track"><i style="width:{{ row.percent }}%"></i></span></div>{% empty %}<p class="chart-empty">Sin producción registrada hoy.</p>{% endfor %}</div>
+        <div class="compact-bars" data-tv-viewport>{% for row in machine_output %}<div class="compact-row"><label><b>{{ row.work_item__machine__code }}</b><span>{{ row.total|floatformat:"-2" }}</span></label><span class="compact-track"><i style="width:{{ row.percent }}%"></i></span></div>{% empty %}<p class="chart-empty">Sin producción registrada hoy.</p>{% endfor %}</div>
+        {% include 'includes/tv_pages.html' with label='producci?n por m?quina' %}
         <div class="analytics-title order-title"><h2>Estado de órdenes</h2><small>Distribución total</small></div>
         <div class="order-stack">{% for row in order_distribution %}<i class="{{ row.class }}" style="width:{{ row.percent }}%" title="{{ row.label }}: {{ row.value }}"></i>{% endfor %}</div>
         <div class="order-legend">{% for row in order_distribution %}<div><b>{{ row.value }}</b><small>{{ row.label }}</small></div>{% endfor %}</div>
       </article>
     </section>
-    <section class="screen-section">
+    <section class="screen-section" data-tv-pages="machines" data-tv-items="article">
       <div class="screen-heading"><div><h1>Estado de máquinas</h1><p>Operación actual y avance por equipo</p></div><div class="live"><i></i> EN VIVO</div></div>
-      <div class="line-machines">
+      <div class="line-machines" data-tv-viewport>
         {% for row in machine_rows %}
           <article class="{% if row.work %}running{% else %}idle{% endif %}">
             <div class="machine-head"><span class="state-dot"></span><div><b>{{ row.machine.code }}</b><small>{% if row.work %}PRODUCIENDO{% else %}DISPONIBLE{% endif %}</small></div></div>
@@ -71,21 +73,25 @@
           </article>
         {% empty %}<p>No hay máquinas configuradas.</p>{% endfor %}
       </div>
+      {% include 'includes/tv_pages.html' with label='m?quinas' %}
     </section>
     <div class="line-lower">
-      <section class="screen-panel queue">
+      <section class="screen-panel queue" data-tv-pages="queue" data-tv-items="tbody tr">
         <div class="panel-title"><h2>Próximos programas</h2><span>{{ open_count }} pendientes</span></div>
-        <table><thead><tr><th>Programa</th><th>Parte</th><th>Cliente</th><th>Saldo</th><th>Entrega</th></tr></thead><tbody>
+        <div class="line-queue-viewport" data-tv-viewport><table><thead><tr><th>Programa</th><th>Parte</th><th>Cliente</th><th>Saldo</th><th>Entrega</th></tr></thead><tbody>
           {% for row in open_orders %}<tr><td><b>{{ row.program }}</b><small>{{ row.folio }}</small></td><td>{{ row.part_display }}</td><td>{{ row.part.client.name|default:'—' }}</td><td><strong>{{ row.remaining_quantity|floatformat:"-2" }}</strong></td><td>{{ row.required_date|date:'d/m'|default:'—' }}</td></tr>{% empty %}<tr><td colspan="5">Sin programas pendientes</td></tr>{% endfor %}
-        </tbody></table>
+        </tbody></table></div>
+        {% include 'includes/tv_pages.html' with label='programas' %}
       </section>
-      <section class="screen-panel latest">
+      <section class="screen-panel latest" data-tv-pages="latest" data-tv-items="article">
         <div class="panel-title"><h2>Últimos cierres</h2><span>hoy</span></div>
-        <div class="close-list">{% for row in recent_closes %}<article><time>{{ row.closed_at|date:'H:i' }}</time><div><b>{{ row.work_item.order.part_display }}</b><small>{{ row.work_item.order.program }} · {{ row.work_item.machine.code }}</small></div><strong>+{{ row.quantity|floatformat:"-2" }}</strong></article>{% empty %}<p>Sin cierres el día de hoy</p>{% endfor %}</div>
+        <div class="close-list" data-tv-viewport>{% for row in recent_closes %}<article><time>{{ row.closed_at|date:'H:i' }}</time><div><b>{{ row.work_item.order.part_display }}</b><small>{{ row.work_item.order.program }} · {{ row.work_item.machine.code }}</small></div><strong>+{{ row.quantity|floatformat:"-2" }}</strong></article>{% empty %}<p>Sin cierres el día de hoy</p>{% endfor %}</div>
+        {% include 'includes/tv_pages.html' with label='cierres' %}
       </section>
     </div>
   </main>
   <footer><span id="connection-status"><i></i>Sistema conectado</span><b>MESA · Operación en tiempo real</b><span>Actualización incremental cada 30 segundos</span></footer>
+  <script src="{% static 'js/tv-pages.js' %}"></script>
   <script>
     const clock = document.getElementById('clock');
     const countdown = document.getElementById('countdown');
@@ -110,6 +116,7 @@
         const nextMain = nextDocument.querySelector('main');
         if (!nextMain) throw new Error('Respuesta del tablero incompleta');
         document.querySelector('main').replaceChildren(...nextMain.childNodes);
+        document.dispatchEvent(new Event('tv:render'));
         connectionStatus.lastChild.textContent = 'Sistema conectado';
       } catch (error) {
         connectionStatus.lastChild.textContent = 'Sin conexión · reintentando';
@@ -163,7 +170,7 @@
       }
     });
   </script>
-  <script src="{% static 'js/theme.js' %}?v=20261012-3"></script>
+  <script src="{% static 'js/theme.js' %}?v=dashboard-palette"></script>
   <script src="{% static 'js/particles.js' %}?v=20261012-3" defer></script>
   <script src="{% static 'js/navigation.js' %}?v=20261012-3" defer></script>
   <script src="{% static 'js/jelly-controls.js' %}?v=20261012-3" defer></script>

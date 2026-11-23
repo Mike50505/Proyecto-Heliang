@@ -16,8 +16,8 @@
       {% if module_access.process_material %}<a href="{% url 'process-material' %}">Material en proceso</a>{% endif %}
       {% if module_access.reports %}<a href="{% url 'report' %}">Reportes</a>{% endif %}
       {% if module_access.line_dashboard %}
-      <a href="{% url 'progress-dashboard' %}">Gráficas de avance</a>
-      <a href="{% url 'line-dashboard' %}">Tablero de línea</a>
+      <a href="{% url 'dashboards' %}">Dashboards</a>
+      {% if perms.operations.change_capacitysettings %}<a href="{% url 'capacity-settings' %}">Planeación</a>{% endif %}
       {% endif %}
       {% if user.is_staff %}<a href="/admin/">Administración</a>{% endif %}
     </nav>

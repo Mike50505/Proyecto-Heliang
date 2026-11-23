@@ -19,7 +19,7 @@
   <link rel="stylesheet" href="{% static 'mesa/mesa-effects.css' %}?v=20261012-3">
   {% block page_styles %}{% endblock %}
   <link rel="stylesheet" href="{% static 'css/heiliang-experience.css' %}?v=20261012-3">
-  <link rel="stylesheet" href="{% static 'css/heiliang-palettes.css' %}?v=20261012-3">
+  <link rel="stylesheet" href="{% static 'css/heiliang-palettes.css' %}?v=shared-theme">
 </head>
 <body>
   <a class="skip-link" href="#main-content">Ir al contenido</a>
@@ -27,7 +27,7 @@
   {% include 'includes/site_header.html' %}
   <main id="main-content" tabindex="-1">{% for message in messages %}<div class="message {{ message.tags }}" role="{% if message.tags == 'error' %}alert{% else %}status{% endif %}">{{ message }}</div>{% endfor %}{% block content %}{% endblock %}</main>
   <footer>MESA <span>Control de inventario y producción</span></footer>
-  <script src="{% static 'js/theme.js' %}?v=20261012-3"></script>
+  <script src="{% static 'js/theme.js' %}?v=dashboard-palette"></script>
   <script src="{% static 'js/navigation.js' %}?v=20261012-3" defer></script>
   <script src="{% static 'mesa/mesa-navigation.js' %}?v=20261012-3" defer></script>
   <script src="{% static 'js/particles.js' %}?v=20261012-3" defer></script>

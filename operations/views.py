@@ -54,6 +54,12 @@ def dashboard(request):
     return render(request, "operations/dashboard.html", context)
 
 
+@login_required
+@module_required("line_dashboard")
+def dashboards(request):
+    return render(request, "operations/dashboards.html")
+
+
 def _orders_matching_list_filters(request, limit=500):
     """Return orders in the same order as the list, with its active filters."""
     orders = ProductionOrder.objects.select_related("part", "part__client", "part__sample_base")

@@ -1,0 +1,262 @@
+.tv-pages-controls {display:none}
+:fullscreen [data-tv-viewport] [hidden] {display:none!important}
+:fullscreen [data-tv-viewport] {min-height:0;min-width:0;overflow:hidden}
+:fullscreen .tv-pages-controls {
+  display:flex;
+  align-items:center;
+  justify-content:flex-end;
+  gap:.55em;
+  flex:none;
+  height:1.85em;
+  margin-top:.2em;
+  color:inherit;
+  font-size:.82em;
+  font-variant-numeric:tabular-nums;
+}
+:fullscreen .tv-pages-single {visibility:hidden}
+:fullscreen .tv-pages-controls button[data-tv-step] {
+  font:inherit;
+  color:inherit;
+  background:transparent;
+  border:1px solid currentColor;
+  padding:0 .6em;
+  border-radius:5px;
+  height:1.55em;
+  min-height:0;
+  line-height:1.4;
+}
+:fullscreen .tv-pages-controls button:focus-visible {outline:2px solid currentColor;outline-offset:2px}
+
+#progress-screen :is(.chart-card,.detail-card) {background:var(--h-surface)}
+#progress-screen .progress-donut {background:conic-gradient(var(--chart-positive) var(--progress),var(--h-border) 0)}
+#progress-screen .progress-donut::before {background:var(--h-surface)}
+#progress-screen .total-legend i.done {background:var(--chart-positive)}
+#progress-screen .total-legend i.pending {background:var(--h-border)}
+.line-page .utilization-donut {background:conic-gradient(var(--chart-positive) var(--value),var(--h-border) 0)}
+.line-page :is(.live,.idle-copy b,.close-list strong) {color:var(--chart-positive)}
+.line-page .state-dot,.line-page :is(.live,footer span:first-child) i {background:var(--chart-positive);box-shadow:none}
+.line-page .running .state-dot,.line-page .order-stack .open {background:var(--chart-reference)}
+.line-page .order-stack .complete {background:var(--chart-positive)}
+.line-page .order-stack .cancelled {background:var(--chart-alert)}
+.line-page .line-header .analytics-screen-button {background:var(--h-action);border-color:var(--h-action)}
+.line-page .line-header .analytics-screen-button small {color:inherit}
+.line-page .line-header .fullscreen-toggle {color:var(--h-ink);background:var(--h-subtle);border-color:var(--h-border)}
+
+/* Keep the value, bar and quantities in the same row box. */
+#progress-screen .chart-bar {display:grid;height:auto;flex:0 0 auto;min-width:0;align-content:center}
+#progress-screen .bar-meta, #progress-screen .bar-values {min-width:0;line-height:1.15}
+#progress-screen .bar-meta span {flex:none;white-space:nowrap}
+#progress-screen .bar-values {flex-wrap:wrap;gap:.25em .7em}
+#progress-screen:fullscreen {
+  --tv-font:clamp(12px,min(1.1vw,1.8vh),30px);
+  box-sizing:border-box;
+  height:100dvh;
+  padding:1.25vh 1.3vw;
+  gap:1vh;
+  font-size:var(--tv-font);
+  font-variant-numeric:tabular-nums;
+}
+#progress-screen:fullscreen .progress-head {
+  grid-template-columns:minmax(0,.8fr) minmax(0,1.2fr);
+  gap:.6em;
+}
+#progress-screen:fullscreen .progress-head h1 {font-size:clamp(16px,4.1vh,60px);line-height:1.1}
+#progress-screen:fullscreen .progress-head p {font-size:.8em;line-height:1.2}
+#progress-screen:fullscreen .progress-head .eyebrow,
+#progress-screen:fullscreen .progress-instructions,
+#progress-screen:fullscreen .chart-title small,
+#progress-screen:fullscreen .chart-explanation small {display:none}
+#progress-screen:fullscreen .filter-actions {gap:.45em;justify-content:flex-end}
+#progress-screen:fullscreen .filter-actions > .button {height:2.3em;min-height:0;padding:0 .7em;font-size:.85em}
+#progress-screen:fullscreen .active-filters {flex:1 1 100%;min-height:0;font-size:.78em;justify-content:flex-end}
+#progress-screen:fullscreen .chart-style-control {font-size:.82em;gap:.35em}
+#progress-screen:fullscreen .chart-style-control select {
+  width:14em;
+  min-width:0;
+  height:2.3em;
+  min-height:0;
+  padding:.25em .65em;
+  font-size:inherit;
+  color:var(--h-ink);
+  background:var(--h-subtle);
+  border-color:var(--h-border);
+}
+#progress-screen:fullscreen .progress-kpis {grid-template-columns:repeat(4,minmax(0,1fr));gap:.6em}
+#progress-screen:fullscreen .progress-kpis article {min-width:0;padding:.42em .7em}
+#progress-screen:fullscreen .progress-kpis b {font-size:clamp(17px,min(4vh,3.4vw),61px);line-height:1.08;overflow-wrap:anywhere}
+#progress-screen:fullscreen .progress-kpis span,
+#progress-screen:fullscreen .progress-kpis small {font-size:.76em;line-height:1.1}
+#progress-screen:fullscreen .analytics-grid {grid-template-columns:minmax(0,.64fr) minmax(0,1fr) minmax(0,1.16fr);gap:.65em}
+#progress-screen:fullscreen .chart-card {display:flex;grid-column:auto;padding:.65em}
+#progress-screen:fullscreen .tv-pages-controls,
+#progress-screen:fullscreen .tv-pages-controls button {color:var(--h-muted)}
+#progress-screen:fullscreen .chart-title {margin:0 0 .45em;flex:none}
+#progress-screen:fullscreen .chart-title span {font-size:.66em}
+#progress-screen:fullscreen .chart-title h2 {font-size:1.28em;line-height:1.1}
+#progress-screen:fullscreen .chart-explanation {flex:none;min-height:0;flex-wrap:wrap;margin:0 0 .45em;gap:.25em .8em;font-size:.77em;line-height:1.15}
+#progress-screen:fullscreen .progress-donut {width:min(26vh,100%)}
+#progress-screen:fullscreen .progress-donut b {font-size:clamp(16px,min(4.5vh,4vw),68px)}
+#progress-screen:fullscreen .progress-donut span {font-size:.74em}
+#progress-screen:fullscreen .total-legend {display:grid;gap:.45em;font-size:.8em}
+#progress-screen:fullscreen .bar-chart {
+  flex:1;
+  height:auto;
+  padding:0;
+  gap:.45em;
+  max-height:none;
+  overflow:hidden;
+}
+#progress-screen:fullscreen button:is(.chart-bar,.classic-bar,.mini-donut-card) {
+  color:var(--h-ink);
+  background:var(--h-subtle);
+  border:1px solid var(--h-border);
+  border-radius:8px;
+  transform:none;
+  font-size:inherit;
+}
+#progress-screen:fullscreen button:is(.chart-bar,.classic-bar,.mini-donut-card):is(:hover,.selected) {
+  background:var(--h-tint);
+  border-color:var(--h-accent);
+}
+#progress-screen:fullscreen .chart-bar {gap:.27em;padding:.45em .55em;min-height:3.4em}
+#progress-screen:fullscreen .chart-bar .bar-meta {margin:0;font-size:.91em}
+#progress-screen:fullscreen .chart-bar .bar-track {height:.42em}
+#progress-screen:fullscreen .chart-bar .bar-values {margin:0;font-size:.74em;color:var(--h-muted)}
+#progress-screen:fullscreen .chart-bar .bar-meta span {color:var(--h-ink)}
+#progress-screen:fullscreen .bar-chart.style-classic,
+#progress-screen:fullscreen .bar-chart.style-donut {
+  display:grid;
+  align-content:start;
+  grid-template-columns:repeat(auto-fill,minmax(min(100%,7.5em),1fr));
+}
+#progress-screen:fullscreen .bar-chart.style-classic {grid-auto-rows:100%}
+#progress-screen:fullscreen .bar-chart.style-donut {grid-auto-rows:7.75em}
+#progress-screen:fullscreen .classic-bar,
+#progress-screen:fullscreen .mini-donut-card {width:100%;min-width:0;padding:.35em;overflow:hidden}
+#progress-screen:fullscreen .classic-values {flex-wrap:wrap;font-size:.65em}
+#progress-screen:fullscreen .classic-plot i {width:min(36%,1.9em)}
+#progress-screen:fullscreen .classic-bar b,
+#progress-screen:fullscreen .mini-donut-card > b {font-size:.82em}
+#progress-screen:fullscreen .classic-bar small,
+#progress-screen:fullscreen .mini-donut-card > small {font-size:.72em}
+#progress-screen:fullscreen .mini-donut {width:4em;flex:none}
+#progress-screen:fullscreen .mini-donut b {font-size:.8em}
+
+/* Scale both number sizes and row heights to the physical viewport. */
+html:fullscreen body.line-page {
+  --line-tv-font:clamp(10px,min(1.04vw,1.6vh),25px);
+  --line-tv-gap:clamp(4px,1vh,16px);
+  display:grid;
+  grid-template-rows:auto minmax(0,1fr) auto;
+  height:100dvh;
+  min-height:0;
+  font-size:var(--line-tv-font);
+  font-variant-numeric:tabular-nums;
+}
+html:fullscreen body.line-page > .line-header {min-height:0;padding:.55em 1.3vw;gap:1em}
+html:fullscreen .line-header .line-title {align-items:flex-start}
+html:fullscreen .line-header :is(.line-title b,.line-clock b) {font-size:1.5em}
+html:fullscreen .line-header :is(.line-title small,.line-clock small) {font-size:.8em}
+html:fullscreen body.line-page > main {
+  display:grid;
+  grid-template-rows:auto minmax(0,.95fr) minmax(0,1.65fr) minmax(0,.9fr);
+  gap:var(--line-tv-gap);
+  overflow:hidden;
+  min-height:0;
+  padding:.65em 1.3vw;
+}
+html:fullscreen .line-page .line-kpis {grid-template-columns:repeat(3,minmax(0,1fr));gap:var(--line-tv-gap)}
+html:fullscreen .line-page .line-kpis article {padding:.45em .7em}
+html:fullscreen .line-page .line-kpis b {font-size:2em;line-height:1.1}
+html:fullscreen .line-page .line-kpis :is(span,small) {font-size:.83em}
+html:fullscreen .line-page .line-analytics {
+  display:grid;
+  grid-template-columns:minmax(0,1.25fr) minmax(0,.75fr) minmax(0,1.15fr);
+  gap:var(--line-tv-gap);
+}
+html:fullscreen .line-page .analytics-card {
+  display:flex;
+  flex-direction:column;
+  min-width:0;
+  padding:.5em .7em;
+  overflow:hidden;
+}
+html:fullscreen .line-page :is(.analytics-title,.panel-title) {gap:.35em;margin:0 0 .25em;flex:none}
+html:fullscreen .line-page :is(.analytics-title h2,.panel-title h2,.screen-heading h1) {font-size:1.13em;line-height:1.1}
+html:fullscreen .line-page .analytics-title small {font-size:.72em;white-space:nowrap}
+html:fullscreen .line-page .daily-chart {flex:1;min-height:0;gap:.36em}
+html:fullscreen .line-page .daily-column {justify-content:stretch;overflow:hidden}
+html:fullscreen .line-page .daily-column strong {margin-bottom:.2em;font-size:clamp(8px,.9vw,1em);white-space:nowrap}
+html:fullscreen .line-page .daily-column label {font-size:.72em;line-height:1.08;text-align:center}
+html:fullscreen .line-page .daily-bar-track {height:0;flex:1}
+html:fullscreen .line-page .utilization-wrap {flex:1;min-height:0;container-type:size}
+html:fullscreen .line-page .utilization-donut {width:min(92cqh,75cqw);min-width:2.4em;max-height:100%;aspect-ratio:1}
+html:fullscreen .line-page .utilization-donut::before {inset:13%}
+html:fullscreen .line-page .utilization-donut b {font-size:clamp(10px,26cqh,1.65em);line-height:1}
+html:fullscreen .line-page .utilization-donut span {display:none}
+html:fullscreen .line-page .order-legend {grid-template-columns:repeat(3,minmax(0,1fr));margin-top:.22em;gap:.18em}
+html:fullscreen .line-page .order-legend div {padding:.18em}
+html:fullscreen .line-page .order-legend b {font-size:.92em;line-height:1}
+html:fullscreen .line-page .order-legend small {font-size:.68em;line-height:1.1}
+html:fullscreen .line-page .order-stack {flex:none;height:.35em}
+html:fullscreen .line-page .compact-bars {flex:1;gap:.12em}
+html:fullscreen .line-page .compact-row {flex:none}
+html:fullscreen .line-page .compact-row label {font-size:.74em;line-height:1.15}
+html:fullscreen .line-page .compact-track {height:.28em;margin-top:.12em}
+html:fullscreen .line-page .screen-section {grid-template-rows:auto minmax(0,1fr) auto}
+html:fullscreen .line-page .screen-heading {margin:0 0 .3em}
+html:fullscreen .line-page .screen-heading p {display:none}
+html:fullscreen .line-page .line-machines {
+  grid-template-columns:repeat(5,minmax(0,1fr));
+  grid-template-rows:none;
+  grid-auto-rows:calc((100% - var(--line-tv-gap)) / 2);
+  gap:var(--line-tv-gap);
+}
+html:fullscreen .line-page .line-machines > article {
+  display:flex;flex-direction:column;padding:.42em .58em;min-height:0;line-height:1.08;
+}
+html:fullscreen .line-page .machine-head {gap:.4em}
+html:fullscreen .line-page .machine-head div {min-width:0}
+html:fullscreen .line-page .state-dot {flex:none;width:.5em;height:.5em}
+html:fullscreen .line-page :is(.machine-head b,.machine-job b) {font-size:1em;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+html:fullscreen .line-page .machine-job {margin-top:.26em;min-width:0}
+html:fullscreen .line-page .machine-job b {margin:.13em 0}
+html:fullscreen .line-page :is(.machine-head small,.machine-job small,.machine-job span) {font-size:.76em;line-height:1.1}
+html:fullscreen .line-page .progress-meta {margin:auto 0 .15em;font-size:.72em}
+html:fullscreen .line-page .progress {height:.34em;flex:none}
+html:fullscreen .line-page .machine-qty {margin-top:.18em;font-size:.72em;line-height:1}
+html:fullscreen .line-page .machine-qty b {display:inline;font-size:1em;margin:0}
+html:fullscreen .line-page .idle-copy {height:auto;flex:1}
+html:fullscreen .line-page .idle-copy b {font-size:1em}
+html:fullscreen .line-page .idle-copy small {font-size:.76em;margin:.2em 0 0}
+html:fullscreen .line-page .line-lower {grid-template-columns:minmax(0,1.3fr) minmax(0,1fr);gap:var(--line-tv-gap)}
+html:fullscreen .line-page .screen-panel {display:flex;flex-direction:column;overflow:hidden}
+html:fullscreen .line-page .panel-title {padding:.4em .6em}
+html:fullscreen .line-page :is(.line-queue-viewport,.close-list) {flex:1}
+html:fullscreen .line-page .queue :is(th,td) {padding:.18em .45em;font-size:.77em;line-height:1.12}
+html:fullscreen .line-page .queue td small {margin:0;font-size:.86em}
+html:fullscreen .line-page .close-list article {padding:.26em 0}
+html:fullscreen .line-page .close-list :is(b,time,strong) {font-size:.8em;line-height:1.15}
+html:fullscreen .line-page .close-list small {font-size:.72em}
+html:fullscreen .line-page .screen-panel .tv-pages-controls {margin-right:.6em}
+html:fullscreen .line-page > .particle-background {display:none}
+html:fullscreen .line-page footer {height:auto;min-height:1.9em;padding:.35em 1.3vw;font-size:.77em}
+
+@media (max-width:850px) {
+  #progress-screen:fullscreen .progress-head {grid-template-columns:minmax(0,1fr)}
+  #progress-screen:fullscreen .analytics-grid {
+    grid-template-columns:repeat(2,minmax(0,1fr));
+    grid-template-rows:auto minmax(0,1fr);
+  }
+  #progress-screen:fullscreen .total-card {grid-column:1 / -1;flex-direction:row;align-items:center;justify-content:space-between;gap:.5em}
+  #progress-screen:fullscreen .total-card .donut-wrap {flex:none;width:5.5em}
+  #progress-screen:fullscreen .progress-donut span {display:none}
+  #progress-screen:fullscreen .progress-donut b {font-size:1.22em}
+  html:fullscreen .line-page .line-machines {grid-template-columns:repeat(3,minmax(0,1fr))}
+  html:fullscreen .line-page .analytics-title small {display:none}
+}
+
+@media (max-height:780px) {
+  #progress-screen:fullscreen .progress-head p {font-size:.72em}
+  html:fullscreen .line-page .machine-job small {display:none}
+}

@@ -1,0 +1,15 @@
+{% extends 'base.html' %}{% load static %}
+{% block title %}Planeación · MESA{% endblock %}
+{% block page_styles %}<link rel="stylesheet" href="{% static 'css/capacity.css' %}">{% endblock %}
+{% block content %}<div class="capacity-board">
+<header class="cap-heading"><div><h1>Planeación</h1><p>Configura los límites de capacidad para todos los clientes y semanas.</p></div></header>
+<form method="post" class="cap-settings">{% csrf_token %}{{ form.revision }}
+{% if form.errors %}<div class="message error" role="alert">Revisa los valores antes de guardar. {{ form.non_field_errors }} {{ form.revision.errors }}</div>{% endif %}
+<section class="panel"><h2>Calendario de planta</h2><p>La capacidad semanal se calcula con las horas disponibles y la tasa de cada máquina en servicio.</p>
+<div class="cap-fields">{% include 'operations/capacity_field.html' with field=form.days %}{% include 'operations/capacity_field.html' with field=form.shifts %}{% include 'operations/capacity_field.html' with field=form.hours %}{% include 'operations/capacity_field.html' with field=form.plant_ceiling %}</div><small>Deja el tope vacío para usar toda la capacidad instalada. Un tope menor reserva capacidad de planta.</small></section>
+<section class="panel"><h2>Límites por diámetro</h2><p>Indica piezas por semana. Una celda vacía deja el diámetro sin límite definido. Cero indica que no hay capacidad.</p>
+<div class="cap-fields">{% for field in form.size_fields %}{% include 'operations/capacity_field.html' %}{% endfor %}{% include 'operations/capacity_field.html' with field=form.shared_limit %}</div>
+<fieldset><legend>Agregar otro diámetro</legend><div class="cap-fields">{% include 'operations/capacity_field.html' with field=form.extra_size %}{% include 'operations/capacity_field.html' with field=form.extra_limit %}</div></fieldset></section>
+<section class="panel"><h2>Máquinas en servicio</h2><p>Desactivar un equipo descuenta su capacidad de planta. Los límites por diámetro se ajustan en la sección anterior.</p><div class="table-wrap"><table><thead><tr><th>Máquina</th><th>Piezas por hora</th><th>En servicio</th></tr></thead><tbody>
+{% for code,rate,enabled in form.machine_fields %}<tr><th>{{ code }}</th><td><label class="cap-sr" for="{{ rate.id_for_label }}">{{ rate.label }}</label>{{ rate }}{{ rate.errors }}</td><td><label class="cap-sr" for="{{ enabled.id_for_label }}">{{ enabled.label }}</label>{{ enabled }}</td></tr>{% endfor %}</tbody></table></div></section>
+<div class="cap-actions"><button type="submit">Guardar límites</button></div></form></div>{% endblock %}

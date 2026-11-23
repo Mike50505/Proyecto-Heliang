@@ -65,6 +65,7 @@ class ModuleAccessTests(TestCase):
         self.assertEqual(self.client.get(reverse("progress-dashboard")).status_code, 200)
 
     def test_line_dashboards_require_their_own_access(self):
+        self.assertRedirects(self.client.get(reverse("dashboards")), reverse("dashboard"))
         self.assertRedirects(self.client.get(reverse("line-dashboard")), reverse("dashboard"))
         self.assertRedirects(self.client.get(reverse("line-dashboard-data")), reverse("dashboard"))
         self.assertRedirects(self.client.get(reverse("progress-dashboard")), reverse("dashboard"))
@@ -72,6 +73,13 @@ class ModuleAccessTests(TestCase):
         access = ModuleAccess.objects.get(user=self.user)
         access.line_dashboard = True
         access.save(update_fields=["line_dashboard"])
+        home = self.client.get(reverse("dashboard"))
+        collection = self.client.get(reverse("dashboards"))
+        self.assertContains(home, f'href="{reverse("dashboards")}"')
+        self.assertNotContains(collection, f'href="{reverse("capacity-settings")}"')
+        for name in ("line-dashboard", "progress-dashboard", "capacity-dashboard"):
+            self.assertNotContains(home, f'href="{reverse(name)}"')
+            self.assertContains(collection, f'href="{reverse(name)}"')
         response = self.client.get(reverse("line-dashboard"))
         self.assertEqual(response.status_code, 200)
         self.assertContains(response, "ESTADO DE LA LÍNEA")

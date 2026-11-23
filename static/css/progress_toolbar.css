@@ -46,12 +46,12 @@
 #progress-screen:fullscreen .filter-actions > .screen-mode { position: static; opacity: 1; }
 #progress-screen:fullscreen .progress-head h1 { color: inherit; }
 #progress-screen:fullscreen :is(.glide-select, .glide-select__menu) {
-  --gs-surface: #10283b;
-  --gs-text: #f4f8fb;
-  --gs-accent: #48d7e9;
-  --gs-highlight: #174c68;
+  --gs-surface: var(--h-subtle);
+  --gs-text: var(--h-ink);
+  --gs-accent: var(--h-accent);
+  --gs-highlight: var(--h-tint);
 }
-#progress-screen:fullscreen .glide-select__trigger { border-color: #31536b; }
+#progress-screen:fullscreen .glide-select__trigger { border-color: var(--h-border); }
 @media (max-width: 700px) {
   #progress-screen .filter-actions { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); }
   #progress-screen .active-filters { grid-column: 1 / -1; min-height: 0; }

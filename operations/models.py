@@ -261,3 +261,18 @@ class ModuleAccess(models.Model):
 
     def __str__(self):
         return f"Accesos de {self.user.username}"
+
+
+class CapacitySettings(models.Model):
+    """Plant-wide planning assumptions, saved together as one revision."""
+    days = models.PositiveSmallIntegerField(default=5)
+    shifts = models.PositiveSmallIntegerField(default=2)
+    hours = models.PositiveSmallIntegerField(default=8)
+    shared_limit = models.PositiveIntegerField(default=25600)
+    plant_ceiling = models.PositiveIntegerField(null=True, blank=True)
+    diameters = models.JSONField(default=dict)
+    machines = models.JSONField(default=dict)
+    revision = models.PositiveIntegerField(default=1)
+
+    class Meta:
+        verbose_name = "configuración de capacidad"

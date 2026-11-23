@@ -1,0 +1,24 @@
+{% extends 'base.html' %}
+{% block title %}Dashboards · MESA{% endblock %}
+{% block content %}
+<div class="hero">
+  <div><h1>Dashboards</h1><p>Consulta el estado de la línea, el avance de producción y la capacidad de planta.</p></div>
+</div>
+<section class="module-grid dashboard-modules" aria-label="Tableros disponibles">
+  <a class="module-card" href="{% url 'line-dashboard' %}">
+    <span class="module-icon">{% include 'includes/module_icon.html' with icon='line' %}</span>
+    <span><b>Tablero de línea</b><small>Estado de máquinas y producción en tiempo real</small></span>
+    <i aria-hidden="true">→</i>
+  </a>
+  <a class="module-card" href="{% url 'progress-dashboard' %}">
+    <span class="module-icon">{% include 'includes/module_icon.html' with icon='chart' %}</span>
+    <span><b>Gráficas de avance</b><small>Cumplimiento por semana y cliente</small></span>
+    <i aria-hidden="true">→</i>
+  </a>
+  <a class="module-card" href="{% url 'capacity-dashboard' %}">
+    <span class="module-icon">{% include 'includes/module_icon.html' with icon='program' %}</span>
+    <span><b>Planeación y capacidad</b><small>Carga semanal y eficiencia por máquina y diámetro</small></span>
+    <i aria-hidden="true">→</i>
+  </a>
+</section>
+{% endblock %}

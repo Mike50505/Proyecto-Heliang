@@ -1,0 +1,131 @@
+<section id="capacity-screen" class="cap-screen" aria-label="Pantalla de planeación">
+  <header class="cap-screen-head">
+    <div><h1>Planeación y capacidad</h1><p data-cap-period>{{ label }}</p>
+      <p class="cap-screen-freshness"><span data-cap-freshness>Consulta <time datetime="{{ snapshot_at|date:'c' }}">{{ snapshot_at|date:'d/m H:i:s' }}</time></span><span class="cap-refresh-cadence"> · Cada 45 s</span></p>
+    </div>
+    <div class="cap-screen-actions">
+      <label class="cap-chart-type" hidden>
+        <span>Tipo de gráfica</span>
+        <select data-cap-chart-type data-glide-skip>
+          <option value="lines">Líneas</option>
+          <option value="bars">Barras dobles</option>
+        </select>
+      </label>
+      <button type="button" data-cap-fullscreen hidden>Pantalla completa</button>
+    </div>
+  </header>
+  <form id="capacity-filters" method="get" data-cap-filter></form>
+  <div class="cap-screen-grid" data-cap-grid>
+    <section class="cap-screen-card cap-week-filter">
+      <label for="cap-week">Semana</label>
+      <select id="cap-week" name="week" form="capacity-filters" data-glide-skip>
+        {% for key,name in weeks %}<option value="{{ key }}" {% if key == week %}selected{% endif %}>{{ name }}</option>{% endfor %}
+      </select>
+      <button type="submit" form="capacity-filters">Aplicar filtros</button>
+    </section>
+    <section class="cap-screen-card cap-client-filter">
+      <label for="cap-client">Cliente</label>
+      <select id="cap-client" name="client" form="capacity-filters" data-glide-skip>
+        <option value="">Todos los clientes</option>
+        {% for id,name in clients %}<option value="{{ id }}" {% if id == client %}selected{% endif %}>{{ name }}</option>{% endfor %}
+      </select>
+    </section>
+    <section class="cap-kpis" aria-label="Resumen del programa" data-cap-kpis>
+      <article><span>Programado</span><strong>{{ total.planned|floatformat:"-3g" }}</strong></article>
+      <article><span>Terminado</span><strong>{{ total.done|floatformat:"-3g" }}</strong></article>
+      <article><span>Pendiente</span><strong>{{ total.pending|floatformat:"-3g" }}</strong></article>
+    </section>
+    <section class="cap-screen-card cap-load">
+      <h2>Capacidad instalada</h2>
+      <div class="cap-capacity-summary" data-cap-capacity>
+        <strong>{{ installed|floatformat:"-3g" }}</strong>
+        <small>piezas por semana · Toda la planta</small>
+        <span class="{% if plant.over %}cap-over{% endif %}">Carga {{ plant.load|floatformat:"-3g" }} / {{ plant.limit|floatformat:"-3g" }}</span>
+        <span class="{% if plant.over %}cap-over{% endif %}">{% if plant.over %}Exceso{% else %}Margen{% endif %} {{ plant_gap|floatformat:"-3g" }}{% if over_limits %} · {{ over_limits|length }} diámetro{{ over_limits|length|pluralize }} con exceso{% endif %}</span>
+      </div>
+      <div class="cap-capacity-group" data-cap-pager>
+      <h3 class="cap-capacity-table-title">Capacidad por máquina</h3>
+      <div class="cap-machine-capacity" role="table" aria-label="Capacidad y utilización semanal por máquina">
+        <div class="cap-machine-capacity-head" role="row">
+          <span role="columnheader">Máquina</span><span role="columnheader">Capacidad</span><span role="columnheader">Producido</span><span role="columnheader">Uso</span>
+        </div>
+        <div class="cap-screen-list cap-machine-capacity-list" data-cap-list="machine-capacity" role="rowgroup">
+        {% for code,limit,produced,used,shift_a,shift_b,other in weekly_machines %}
+          <div class="cap-screen-row cap-machine-capacity-row" data-cap-row role="row">
+            <b title="{{ code }}" role="rowheader">{{ code }}</b>
+            <span role="cell">{% if limit == None %}<abbr title="Sin capacidad configurada">—</abbr>{% elif limit == 0 %}<abbr title="Fuera de servicio">0</abbr>{% else %}{{ limit|floatformat:"-3g" }}{% endif %}</span>
+            <span role="cell"{% if produced != None %} aria-describedby="capacity-machine-shifts-{{ forloop.counter }}"{% endif %}>{% if produced == None %}—{% else %}{{ produced|floatformat:"-3g" }}{% endif %}</span>
+            <strong role="cell"{% if used > 100 %} class="cap-over"{% endif %}>{% if used == None %}—{% else %}{{ used|floatformat:1 }} %{% endif %}</strong>
+            {% if produced != None %}
+              <small id="capacity-machine-shifts-{{ forloop.counter }}" aria-hidden="true" class="cap-machine-shifts"><span>Turno A {{ shift_a|floatformat:"-3g" }}</span><span>Turno B {{ shift_b|floatformat:"-3g" }}</span>{% if other %}<span>Otros / sin turno {{ other|floatformat:"-3g" }}</span>{% endif %}</small>
+            {% endif %}
+          </div>
+        {% empty %}<div role="row"><span role="cell">Sin máquinas configuradas.</span></div>{% endfor %}
+        </div>
+      </div>
+      <button class="cap-page secondary" type="button" data-cap-next hidden></button>
+      </div>
+      <div class="cap-capacity-group" data-cap-pager>
+        <h3 class="cap-capacity-table-title">Límites por diámetro</h3>
+        <div class="cap-machine-capacity" role="table" aria-label="Carga y límite semanal por diámetro">
+          <div class="cap-diameter-capacity-head" role="row">
+            <span role="columnheader">Diámetro</span><span role="columnheader">Carga</span><span role="columnheader">Límite</span>
+          </div>
+          <div class="cap-screen-list cap-machine-capacity-list" data-cap-list="diameter-capacity" role="rowgroup">
+            {% for row in capacities %}
+              {% if row.limit != None %}{% include 'operations/capacity_diameter_row.html' %}{% endif %}
+            {% endfor %}
+            {% include 'operations/capacity_diameter_row.html' with row=pool %}
+          </div>
+        </div>
+        <button class="cap-page secondary" type="button" data-cap-next hidden></button>
+      </div>
+      <a href="#capacidad">Ver detalle</a>
+    </section>
+    <section class="cap-screen-card cap-clients" data-cap-pager>
+      <h2>Avance por cliente</h2><small>Terminado / programado</small>
+      <div class="cap-screen-list" data-cap-list="clients">
+        {% for name,row in customers %}{% include 'operations/capacity_progress_bar.html' with name=name row=row %}{% empty %}<p>Sin órdenes para esta selección.</p>{% endfor %}
+      </div>
+      <button class="cap-page secondary" type="button" data-cap-next hidden></button>
+    </section>
+    <section class="cap-screen-card cap-machines">
+      <div class="cap-chart-heading">
+        <div><h2>Eficiencia por máquina</h2><small>Piezas acumuladas · Toda la planta</small></div>
+        <select aria-label="Máquina de la gráfica" name="chart_machine" form="capacity-filters" data-cap-chart-filter data-glide-skip>
+          <option value="">Todas las máquinas</option>
+          {% for name in machine_options %}<option value="{{ name }}" {% if name == chart_machine %}selected{% endif %}>{{ name }}</option>{% endfor %}
+        </select>
+      </div>
+      <div class="cap-chart-content" data-cap-series="machine">
+        {% include 'operations/capacity_weekly_chart.html' with series=machine_series has_other=machine_other_output chart_id='machine' target_label='Capacidad' chart_label='Producción y capacidad acumuladas por máquina' %}
+      </div>
+    </section>
+    <section class="cap-screen-card cap-diameters">
+      <div class="cap-chart-heading">
+        <div><h2>Eficiencia por diámetro</h2><small>Piezas acumuladas · Programa seleccionado</small></div>
+        <select aria-label="Diámetro de la gráfica" name="chart_diameter" form="capacity-filters" data-cap-chart-filter data-glide-skip>
+          <option value="">Todos los diámetros</option>
+          {% for name in diameter_options %}<option value="{{ name }}" {% if name == chart_diameter %}selected{% endif %}>{{ name }}</option>{% endfor %}
+        </select>
+      </div>
+      <div class="cap-chart-content" data-cap-series="diameter">
+        {% include 'operations/capacity_weekly_chart.html' with series=diameter_series has_other=diameter_other_output chart_id='diameter' target_label='Programado' chart_label='Producción y programa acumulados por diámetro' %}
+      </div>
+    </section>
+    <section class="cap-screen-card cap-orders" data-cap-pager>
+      <h2>Órdenes disponibles</h2>
+      <div class="cap-orders-total" data-cap-orders-total><strong>{{ total.available }}</strong><small>Abiertas con saldo para asignar</small></div>
+      <div class="cap-screen-list" data-cap-list="orders">
+        {% for folio,part,customer,qty in available_orders %}
+          <div class="cap-screen-row" data-cap-row>
+            <div class="cap-row-title"><b title="{{ part }}">{{ part }}</b><strong>{{ qty|floatformat:"-3g" }}</strong></div>
+            <small title="{{ folio }} · {{ customer }}">{{ folio }} · {{ customer }}</small>
+          </div>
+        {% empty %}<p>Sin órdenes disponibles.</p>{% endfor %}
+      </div>
+      <button class="cap-page secondary" type="button" data-cap-next hidden></button>
+    </section>
+  </div>
+  <p class="cap-screen-status" data-cap-status role="status"></p>
+</section>

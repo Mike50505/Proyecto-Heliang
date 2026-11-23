@@ -25,10 +25,10 @@
 <a class="module-card" href="{% url 'process-list' %}"><span class="module-icon">{% include 'includes/module_icon.html' with icon='processes' %}</span><span><b>Procesos y máquinas</b><small>Consulta el catálogo operativo de planta</small></span><i aria-hidden="true">→</i></a>
 {% endif %}
 {% if module_access.line_dashboard %}
-<a class="module-card" href="{% url 'progress-dashboard' %}"><span class="module-icon">{% include 'includes/module_icon.html' with icon='chart' %}</span><span><b>Gráficas de avance</b><small>Consulta el avance por semana y cliente</small></span><i aria-hidden="true">→</i></a>
+<a class="module-card" href="{% url 'dashboards' %}"><span class="module-icon">{% include 'includes/module_icon.html' with icon='chart' %}</span><span><b>Dashboards</b><small>Avance, producción en línea y capacidad</small></span><i aria-hidden="true">→</i></a>
+{% if perms.operations.change_capacitysettings %}
+<a class="module-card" href="{% url 'capacity-settings' %}"><span class="module-icon">{% include 'includes/module_icon.html' with icon='program' %}</span><span><b>Planeación</b><small>Configura el calendario, las máquinas y los límites de capacidad</small></span><i aria-hidden="true">→</i></a>
 {% endif %}
-{% if module_access.line_dashboard %}
-<a class="module-card" href="{% url 'line-dashboard' %}"><span class="module-icon">{% include 'includes/module_icon.html' with icon='line' %}</span><span><b>Tablero visual de línea</b><small>Vista en tiempo real para pantallas de producción</small></span><i aria-hidden="true">→</i></a>
 {% endif %}
 {% if module_access.inventory %}
 <a class="module-card" href="{% url 'inventory-list' %}"><span class="module-icon">{% include 'includes/module_icon.html' with icon='inventory' %}</span><span><b>Inventario</b><small>Consulta existencias por parte y proceso</small></span><i aria-hidden="true">→</i></a>

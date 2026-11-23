@@ -1,6 +1,20 @@
 /* Local appearance palettes. Keep shared MESA files and base light/dark semantics. */
 @media screen {
 :root {
+  --mesa-dashboard-bg: #081421;
+  --mesa-dashboard-surface: #102234;
+  --mesa-dashboard-border: #30475d;
+  --mesa-dashboard-ink: #f5f9ff;
+  --mesa-dashboard-muted: #b6c9dc;
+  --mesa-dashboard-blue: #76b8ff;
+  --mesa-dashboard-green: #66e4bc;
+  --mesa-dashboard-amber: #ffd282;
+  --mesa-dashboard-red: #ff9b9b;
+  --mesa-dashboard-glow: #16344e;
+  --dashboard-background: var(--h-bg);
+  --chart-positive: #176943;
+  --chart-reference: #845415;
+  --chart-alert: #a52c31;
   --h-bg: #f0f5fc;
   --h-surface: #fff;
   --h-ink: #1d1d1f;
@@ -13,6 +27,9 @@ html[data-theme="dark"] {
   --h-ink: #f5f5f7;
   --h-header: rgb(22 22 23 / 94%);
   --h-particle-opacity: .48;
+  --chart-positive: #73daa1;
+  --chart-reference: #ffd282;
+  --chart-alert: #ff9b9b;
 }
 html[data-palette="pearl"] {
   --h-bg: #e8ebee;
@@ -90,6 +107,35 @@ html[data-palette="slate"] {
   --orange: #dac49a;
   --violet: #bcb4d5;
   --purple: #bcb4d5;
+  --chart-positive: var(--green);
+  --chart-reference: var(--amber);
+}
+html[data-palette="dashboard"] {
+  --h-bg: var(--mesa-dashboard-bg);
+  --h-surface: var(--mesa-dashboard-surface);
+  --h-subtle: #162e45;
+  --h-ink: var(--mesa-dashboard-ink);
+  --h-muted: var(--mesa-dashboard-muted);
+  --h-accent: var(--mesa-dashboard-blue);
+  --h-action: #005bb5;
+  --h-action-hover: #1068c0;
+  --h-border: var(--mesa-dashboard-border);
+  --h-tint: #1b3c56;
+  --h-header: #0b1c2c;
+  --h-shadow: 0 6px 24px rgb(0 0 0 / 20%);
+  --h-particle-opacity: .18;
+  --h-particle-1: var(--mesa-dashboard-blue);
+  --h-particle-2: var(--mesa-dashboard-green);
+  --h-particle-3: var(--mesa-dashboard-amber);
+  --green: var(--mesa-dashboard-green);
+  --amber: var(--mesa-dashboard-amber);
+  --orange: var(--mesa-dashboard-amber);
+  --violet: #c2a8ff;
+  --purple: #c2a8ff;
+  --dashboard-background: radial-gradient(ellipse at 35% 0, var(--mesa-dashboard-glow) 0, transparent 65%) var(--h-bg);
+  --chart-positive: var(--green);
+  --chart-reference: var(--amber);
+  --chart-alert: var(--mesa-dashboard-red);
 }
 html:is([data-palette="pearl"],[data-palette="ivory"],[data-palette="sage"]) {
   --green: #326645;
@@ -97,6 +143,8 @@ html:is([data-palette="pearl"],[data-palette="ivory"],[data-palette="sage"]) {
   --orange: #815b23;
   --violet: #5c527c;
   --purple: #5c527c;
+  --chart-positive: var(--green);
+  --chart-reference: var(--amber);
 }
 /* Bridge semantic colors to every existing component, including the line board. */
 html[data-palette] {
@@ -137,6 +185,9 @@ html[data-palette] :is(.glide-select,.glide-select__menu) {
   --gs-highlight: color-mix(in srgb,var(--h-accent) 14%,transparent);
 }
 html[data-palette] body { background: var(--h-bg); color: var(--h-ink); }
+html[data-palette="dashboard"] body {
+  background: var(--dashboard-background) no-repeat fixed;
+}
 html[data-palette] .particle-background { opacity: var(--h-particle-opacity); }
 html[data-palette="slate"] :is(.classic-values,.bar-values,.machine-job small,.line-clock small) { color: var(--h-muted); }
 /* Home accents follow the selected palette without filling the module cards. */

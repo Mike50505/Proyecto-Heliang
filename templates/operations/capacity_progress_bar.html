@@ -1,0 +1,5 @@
+<div class="cap-screen-row" data-cap-row>
+  <div class="cap-row-title"><b title="{{ name }}">{{ name }}</b><strong>{{ row.percent|floatformat:1 }} %</strong></div>
+  <progress max="100" value="{{ row.percent|floatformat:'2u' }}" aria-label="Avance de {{ name }}"></progress>
+  <small>{{ row.done|floatformat:"-3g" }} / {{ row.planned|floatformat:"-3g" }} piezas</small>
+</div>

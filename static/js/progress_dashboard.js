@@ -92,7 +92,7 @@ function renderDetail(rows) {
   }).join('') || '<tr><td colspan="6">No hay órdenes para los filtros seleccionados.</td></tr>';
 }
 
-function render() {
+function render(resetPages = true) {
   const rows = filtered();
   const total = summarize(rows);
   document.getElementById('kpi-programmed').textContent = numberFormat.format(total.programmed);
@@ -109,6 +109,7 @@ function render() {
   renderBars('client-chart', group(filtered({ignoreClient: true}), 'client').sort((a,b) => b.programmed - a.programmed), 'client');
   renderFilters();
   renderDetail(rows);
+  document.dispatchEvent(new CustomEvent('tv:render', {detail: {reset: resetPages}}));
 }
 
 document.addEventListener('click', event => {
@@ -166,7 +167,7 @@ async function refreshProgress() {
     if (!response.ok) throw new Error(`HTTP ${response.status}`);
     const data = await response.json();
     progressRows = data.progress_data;
-    render();
+    render(false);
     refreshStatus.textContent = 'Actualizado · próxima consulta en 30 segundos';
   } catch (error) {
     refreshStatus.textContent = 'Sin conexión · reintentando';

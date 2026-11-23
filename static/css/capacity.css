@@ -1,0 +1,216 @@
+.capacity-board, .cap-settings {display:grid;gap:1.25rem}
+.capacity-board {font-variant-numeric:tabular-nums}
+.cap-heading,.cap-actions,.cap-pages {display:flex;align-items:center;justify-content:space-between;gap:1rem;flex-wrap:wrap}
+.cap-heading h1 {margin:.35rem 0;font-size:clamp(2rem,4vw,3.2rem);letter-spacing:-.045em}
+.capacity-board .panel {min-width:0;margin:0;padding:clamp(1rem,2vw,1.6rem)}
+.capacity-board h2 {font-size:1.25rem;margin:0 0 .65rem}
+.capacity-board p {margin:.3rem 0 .9rem}
+.cap-link {font-weight:650;text-decoration:underline;text-underline-offset:.25em}
+.cap-filters,.cap-fields {display:flex;align-items:end;gap:1rem;flex-wrap:wrap}
+.cap-filters label,.cap-fields label {display:grid;gap:.4rem;min-width:9rem;font-weight:600;flex:1}
+.cap-filters button,.cap-actions button {min-height:44px}
+.cap-fields {display:grid;grid-template-columns:repeat(auto-fit,minmax(min(12rem,100%),1fr))}
+.cap-settings fieldset {margin:1.25rem 0 0;border:1px solid var(--line);border-radius:10px;padding:1rem}
+.cap-summary {display:grid;gap:.3rem;padding:.7rem 0}
+.capacity-board .table-wrap {overflow-x:auto;margin:1rem 0}
+.capacity-board th,.capacity-board td {white-space:nowrap}
+.capacity-board tfoot {font-weight:650}
+.cap-warning {background:rgba(224,62,62,.12)}
+.cap-warning td:last-child,.cap-summary.cap-warning {box-shadow:inset 3px 0 #cb4646;padding-left:.8rem}
+.cap-settings input[type=number] {max-width:100%}
+.cap-settings td input[type=number] {width:8rem}
+.cap-settings input[type=checkbox] {width:1.35rem;height:1.35rem}
+.cap-sr {position:absolute;width:1px;height:1px;overflow:hidden;clip-path:inset(50%)}
+.cap-actions {justify-content:flex-end}
+@media(max-width:760px){.cap-heading{align-items:start}}
+@media(max-width:400px){.cap-filters>*{width:100%}}
+
+[data-cap-details] {display:grid;gap:1.25rem}
+.cap-screen {
+  --tv-bg:var(--h-bg);
+  --tv-panel:var(--h-surface);
+  --tv-line:var(--h-border);
+  --tv-muted:var(--h-muted);
+  --tv-blue:var(--h-accent);
+  --tv-green:var(--chart-positive);
+  --tv-amber:var(--chart-reference);
+  --tv-red:var(--chart-alert);
+  --tv-shift-a:var(--h-accent);
+  --tv-shift-b:#594893;
+  display:grid;
+  gap:1rem;
+  padding:clamp(.8rem,1.35vw,1.8rem);
+  border-radius:18px;
+  color:var(--h-ink);
+  background:var(--dashboard-background);
+}
+html[data-theme="dark"] .cap-screen {--tv-shift-b:#c5affb}
+.cap-screen [hidden] {display:none!important}
+.cap-screen-head,.cap-screen-actions,.cap-row-title {
+  display:flex;align-items:center;justify-content:space-between;gap:.65rem;
+}
+.cap-screen-head h1 {font-size:clamp(1.45rem,2.4vw,2.75rem);line-height:1.12;letter-spacing:-.04em;margin:0;color:inherit}
+.capacity-board .cap-screen p {margin:.2em 0 0;color:var(--tv-muted)}
+.cap-screen-freshness {font-size:.78em;line-height:1.2}
+.cap-refresh-cadence {display:none}
+.cap-screen:fullscreen .cap-refresh-cadence {display:inline}
+.capacity-board .cap-screen .cap-screen-status {color:var(--tv-amber)}
+.cap-screen-actions a {color:var(--tv-blue);white-space:nowrap}
+.cap-screen-actions {flex-wrap:wrap;justify-content:flex-end}
+.cap-chart-type {display:flex;align-items:center;gap:.55em;font-size:.8em;color:var(--tv-muted)}
+.cap-screen .cap-chart-type select {width:auto}
+.cap-screen button {
+  color:var(--h-ink);background:var(--h-subtle);border:1px solid var(--h-border);
+  box-shadow:none;white-space:nowrap;padding:.4em .85em;min-height:2.3em;
+}
+#capacity-screen button:is([data-cap-fullscreen],[type="submit"]) {
+  color:#fff;background:var(--h-action);border-color:var(--h-action);
+}
+#capacity-screen button:is([data-cap-fullscreen],[type="submit"]):hover {
+  background:var(--h-action-hover);border-color:var(--h-action-hover);
+}
+#capacity-filters {display:none}
+#capacity-screen > .cap-screen-head {background:transparent;padding:0;border:0}
+.cap-screen select {
+  padding:.4em;min-width:0;min-height:2.3em;background:var(--h-input-bg);border:1px solid var(--h-border);color:var(--h-ink);
+}
+.cap-screen .cap-kpis {grid-area:kpis;min-width:0;display:grid;grid-template-rows:repeat(3,minmax(0,1fr));gap:.4rem}
+.cap-screen .cap-kpis article {
+  display:flex;flex-wrap:wrap;align-items:center;justify-content:space-between;gap:.25em .5em;
+  border:1px solid var(--tv-line);border-left:3px solid var(--tv-blue);
+  background:var(--tv-panel);color:var(--h-ink);padding:.35em .6em;border-radius:10px;
+}
+.cap-screen .cap-kpis article:nth-child(2) {border-left-color:var(--tv-green)}
+.cap-screen .cap-kpis article:nth-child(3) {border-left-color:var(--tv-amber)}
+.cap-screen .cap-kpis span {font-size:.78em;color:var(--tv-muted);line-height:1.1}
+.cap-screen .cap-kpis strong {font-size:clamp(1rem,1.55vw,2.15rem);line-height:1.1}
+.cap-screen-grid {
+  display:grid;grid-template-columns:repeat(5,minmax(0,1fr));gap:clamp(.35rem,.8vw,.9rem);
+  grid-template-areas:"week client kpis capacity orders"
+                      "clients machines machines capacity orders"
+                      "clients diameters diameters capacity orders";
+}
+.cap-week-filter {grid-area:week;justify-content:center;gap:.65em}
+.cap-client-filter {grid-area:client;justify-content:center;gap:.65em}
+.cap-week-filter label,.cap-client-filter label {font-weight:700}
+.cap-load {grid-area:capacity}
+.cap-clients {grid-area:clients}
+.cap-machines {grid-area:machines}
+.cap-diameters {grid-area:diameters}
+.cap-orders {grid-area:orders}
+.cap-screen-card {
+  display:flex;flex-direction:column;min-width:0;min-height:0;
+  background:var(--tv-panel);border:1px solid var(--tv-line);border-radius:13px;
+  padding:clamp(.52rem,.85vw,1.2rem);
+}
+.cap-screen-card.cap-week-filter {border-top:3px solid var(--tv-blue)}
+.cap-screen-card:is(.cap-client-filter,.cap-clients) {border-top:3px solid var(--tv-green)}
+.cap-screen-card.cap-load {border-top:3px solid var(--tv-blue)}
+.cap-screen-card.cap-orders {border-top:3px solid var(--tv-amber)}
+.cap-screen-card h2 {font-size:clamp(.94rem,1.3vw,1.75rem);margin:0;line-height:1.15;color:inherit}
+.cap-screen-card small {color:var(--tv-muted);font-size:.78em}
+.cap-capacity-summary,.cap-orders-total {display:grid;gap:.22em;margin-top:.4em}
+.cap-orders-total strong {font-size:clamp(1.35rem,2.1vw,2.75rem);line-height:1.1}
+.cap-capacity-summary strong {font-size:1.15em;line-height:1.1}
+.cap-capacity-summary span {font-size:.77em}
+.cap-load a {color:var(--tv-blue);font-size:.8em;margin-top:.4em}
+.cap-capacity-group,.cap-machine-capacity {display:flex;flex-direction:column;min-height:0}
+.cap-screen .cap-capacity-table-title {font-size:.82em;margin:.55em 0 .14em;color:var(--tv-blue);line-height:1.2}
+.cap-machine-capacity-head,.cap-screen .cap-machine-capacity-row,
+.cap-diameter-capacity-head,.cap-screen .cap-diameter-capacity-row {
+  display:grid;
+  align-items:center;gap:.25em;text-align:right;white-space:nowrap;
+}
+.cap-machine-capacity-head,.cap-screen .cap-machine-capacity-row {
+  grid-template-columns:minmax(0,1.33fr) minmax(0,1fr) minmax(0,1fr) minmax(0,.9fr);
+}
+.cap-diameter-capacity-head,.cap-screen .cap-diameter-capacity-row {
+  grid-template-columns:minmax(0,1.4fr) repeat(2,minmax(0,1fr));
+}
+.cap-machine-capacity-head,.cap-diameter-capacity-head {
+  padding:.15em 0;border-bottom:1px solid var(--tv-line);
+  color:var(--tv-muted);font-size:clamp(.64rem,.62vw,.9rem);
+}
+.cap-screen :is(.cap-machine-capacity-row,.cap-diameter-capacity-row) {font-size:clamp(.66rem,.7vw,1rem);padding:.2em 0}
+.cap-machine-capacity-head :first-child,.cap-diameter-capacity-head :first-child,
+.cap-machine-capacity-row b,.cap-diameter-capacity-row b {
+  text-align:left;overflow:hidden;text-overflow:ellipsis;
+}
+.cap-machine-capacity-row strong {color:var(--tv-green)}
+.cap-machine-capacity-row .cap-machine-shifts {
+  grid-column:1 / -1;display:flex;justify-content:flex-end;gap:.55em;
+  font-size:.76em;line-height:1.15;
+}
+.cap-machine-shifts span:first-child {color:var(--tv-shift-a)}
+.cap-machine-shifts span:nth-child(2) {color:var(--tv-shift-b)}
+.cap-load abbr {text-decoration:none}
+.cap-screen .cap-machine-capacity-list {margin-top:0}
+.cap-orders-total strong {color:var(--tv-amber)}
+.cap-chart-content {flex:1;display:flex;flex-direction:column;min-height:0}
+.cap-chart-heading {display:flex;justify-content:space-between;align-items:center;gap:.5rem;min-width:0}
+#capacity-screen .cap-chart-heading select {width:min(42%,15rem)}
+.cap-chart-legend {display:flex;align-items:center;gap:.55em 1em;flex-wrap:wrap;font-size:.78em;margin-top:.25em}
+.cap-series-total {--series-color:var(--tv-green)}
+.cap-series-a {--series-color:var(--tv-shift-a)}
+.cap-series-b {--series-color:var(--tv-shift-b)}
+.cap-series-other {--series-color:var(--tv-muted)}
+.cap-series-target {--series-color:var(--tv-amber)}
+.cap-chart-legend span::before {content:"";display:inline-block;width:1.2em;border-top:2px solid var(--series-color);vertical-align:middle;margin-right:.35em}
+.cap-chart-legend .cap-series-target::before {border-top-style:dashed}
+.cap-chart-legend .cap-series-b::before {border-top-style:dotted}
+.cap-screen[data-chart-type="bars"] .cap-chart-legend span::before {width:.75em;height:.72em;border:0;background:var(--series-color)}
+.cap-screen[data-chart-type="bars"] .cap-series-total {display:none}
+.cap-chart-legend small {font-size:1em}
+.cap-screen-list {margin-top:.4em}
+.cap-screen:not(:fullscreen) .cap-screen-list {max-height:30rem;overflow:auto}
+.cap-line-chart {position:relative;flex:1;min-height:12rem;margin-top:.3em}
+.cap-line-chart canvas {position:absolute;inset:0;width:100%;height:100%}
+.cap-line-chart canvas:not([hidden]) + ul {
+  position:absolute;width:1px;height:1px;overflow:hidden;clip-path:inset(50%);white-space:nowrap;
+}
+.cap-screen:fullscreen .cap-line-chart {min-height:0}
+.cap-screen-row {
+  display:grid;grid-auto-rows:max-content;align-content:center;gap:.24em;line-height:1.15;
+  min-width:0;padding:.46em 0;border-bottom:1px solid var(--tv-line);
+}
+.cap-screen-row>small {display:block;line-height:1.2;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.cap-row-title b {overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.cap-row-title strong {white-space:nowrap;color:var(--tv-green)}
+.cap-screen-row progress {
+  display:block;width:100%;height:.48em;min-height:4px;
+  appearance:none;border:0;border-radius:4px;overflow:hidden;background:var(--h-border);
+}
+.cap-screen-row progress::-webkit-progress-bar {background:var(--h-border)}
+.cap-screen-row progress::-webkit-progress-value {background:var(--bar-color,var(--tv-green))}
+.cap-screen-row progress::-moz-progress-bar {background:var(--bar-color,var(--tv-green))}
+.cap-screen .cap-over {color:var(--tv-red)}
+#capacity-screen .cap-page {font-size:.77em;margin-top:.35em;align-self:flex-end;color:var(--h-ink);background:var(--h-subtle);min-height:2em;padding:.25em .6em}
+.cap-screen-status:empty {display:none}
+.cap-screen:fullscreen {
+  width:100vw;height:100dvh;overflow:hidden;border-radius:0;
+  grid-template-rows:auto minmax(0,1fr) auto;
+  font-size:clamp(.76rem,1.04vw,1.55rem);gap:1vh;
+}
+.cap-screen:fullscreen::backdrop {background:var(--tv-bg)}
+.cap-screen:fullscreen .cap-screen-actions a,.cap-screen:fullscreen .cap-load a {display:none}
+.cap-screen:fullscreen .cap-screen-grid {min-height:0;grid-template-rows:auto repeat(2,minmax(0,1fr))}
+.cap-screen:fullscreen .cap-screen-card {overflow:hidden}
+.cap-screen:fullscreen .cap-screen-list {min-height:0;flex:1;overflow:hidden}
+.cap-screen:fullscreen .cap-screen-row {height:clamp(3.55em,5.55vh,5.8rem);padding:.3em 0}
+.cap-screen:fullscreen .cap-orders .cap-screen-row {height:clamp(2.85em,4.7vh,5rem)}
+.cap-screen:fullscreen :is(.cap-machine-capacity-row,.cap-diameter-capacity-row) {height:1.6em;padding:.1em 0}
+.cap-screen:fullscreen .cap-machine-capacity-row {height:2.45em}
+.cap-screen:fullscreen .cap-machine-capacity-list {flex:0 1 auto}
+@media(max-width:900px) {
+  .cap-screen:not(:fullscreen) .cap-screen-grid {
+    grid-template-columns:repeat(2,minmax(0,1fr));
+    grid-template-areas:"week client" "kpis capacity" "machines machines" "diameters diameters" "clients orders";
+  }
+  .cap-screen:not(:fullscreen) .cap-screen-head {flex-wrap:wrap}
+}
+@media(max-width:540px) {
+  .cap-screen:not(:fullscreen) .cap-screen-grid {
+    grid-template-columns:minmax(0,1fr);
+    grid-template-areas:"week" "client" "kpis" "capacity" "machines" "diameters" "clients" "orders";
+  }
+}
