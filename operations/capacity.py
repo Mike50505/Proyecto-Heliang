@@ -249,9 +249,7 @@ def dashboard(request):
     diameter_series = []
     machine_daily = defaultdict(Counter)
     machine_options = sorted(code for code, limit in machine_limits.items() if limit > 0)
-    available_diameters = (actual_by_diameter.keys() | by_diameter.keys()) if physical else by_diameter.keys()
-    diameter_options = sorted((size for size in available_diameters
-                               if config.diameters.get(size) is not None and config.diameters.get(size) > 0),
+    diameter_options = sorted((size for size, limit in config.diameters.items() if limit and limit > 0),
                               key=diameter_category_sort_key)
     if config.shared_limit is not None and config.shared_limit > 0:
         diameter_options.append(SHARED_LABEL)
@@ -259,6 +257,12 @@ def dashboard(request):
     chart_diameter = request.GET.get("chart_diameter", "")
     if chart_diameter not in diameter_options:
         chart_diameter = ""
+    selected_sizes = SHARED if chart_diameter == SHARED_LABEL else (chart_diameter,) if chart_diameter else ()
+    diameter_limit = plant_limit
+    if chart_diameter == SHARED_LABEL:
+        diameter_limit = config.shared_limit
+    elif chart_diameter:
+        diameter_limit = config.diameters[chart_diameter]
     day = request.GET.get("day", "")
     shift = request.GET.get("shift", "")
     shift_options = []
@@ -285,18 +289,15 @@ def dashboard(request):
         if physical:
             diameter_output = Counter()
             for size, output_by_day in actual_by_diameter.items():
-                if not chart_diameter or (size in SHARED if chart_diameter == SHARED_LABEL else size == chart_diameter):
+                if not selected_sizes or size in selected_sizes:
                     diameter_output.update(output_by_day)
-            diameter_target = (config.shared_limit if chart_diameter == SHARED_LABEL else
-                               config.diameters.get(chart_diameter)) if chart_diameter else plant_limit
-            diameter_series = weekly_series(dates, today, config.days, diameter_output, diameter_target, daily=True)
+            diameter_series = weekly_series(dates, today, config.days, diameter_output, diameter_limit, daily=True)
         else:
-            selected_sizes = SHARED if chart_diameter == SHARED_LABEL else (chart_diameter,) if chart_diameter else ()
             diameter_target = (sum(by_diameter[size].planned for size in selected_sizes) if selected_sizes
-                               else by_diameter[chart_diameter].planned if chart_diameter else total.planned)
-            if diameter_target:
+                               else total.planned)
+            if diameter_target or diameter_limit:
                 matching_orders = [order_id for order_id, size in selected_parts.items()
-                                   if not chart_diameter or (size in SHARED if chart_diameter == SHARED_LABEL else size == chart_diameter)]
+                                   if not selected_sizes or size in selected_sizes]
                 closes_by_shift = ProductionClose.objects.filter(work_item__order_id__in=matching_orders,
                                                                    closed_at__lt=cutoff)
                 closes_by_shift = operational_closes(closes_by_shift).filter(
@@ -351,6 +352,8 @@ def dashboard(request):
         "available_orders": available_orders,
         "machine_series": machine_series, "machine_options": machine_options, "chart_machine": machine_code,
         "diameter_series": diameter_series, "diameter_options": diameter_options, "chart_diameter": chart_diameter,
+        "diameter_daily_limit": Decimal(diameter_limit) / config.days,
+        "capacity_workdays": config.days,
         "machine_other_output": any(row[-1] for row in machine_series),
         "diameter_other_output": any(row[-1] for row in diameter_series),
         "capacities": rows, "plant": plant, "pool": pool, "installed": installed,

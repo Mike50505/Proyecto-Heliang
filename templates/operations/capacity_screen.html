@@ -118,9 +118,9 @@
       </div>
       <div class="cap-chart-content" data-cap-series="diameter">
         {% if physical_week %}
-          {% include 'operations/capacity_weekly_chart.html' with series=diameter_series has_other=diameter_other_output chart_id='diameter' target_label='Capacidad diaria' chart_label='Producción diaria y capacidad diaria por diámetro' %}
+          {% include 'operations/capacity_weekly_chart.html' with series=diameter_series has_other=diameter_other_output chart_id='diameter' target_label='Máximo diario' chart_label='Producción diaria y capacidad diaria por diámetro' %}
         {% else %}
-          {% include 'operations/capacity_weekly_chart.html' with series=diameter_series has_other=diameter_other_output chart_id='diameter' target_label='Programa diario' chart_label='Producción diaria y programa diario por diámetro' %}
+          {% include 'operations/capacity_weekly_chart.html' with series=diameter_series has_other=diameter_other_output chart_id='diameter' target_label='Programa diario' daily_limit=diameter_daily_limit chart_label='Producción diaria y programa diario por diámetro con límite configurado' %}
         {% endif %}
       </div>
     </section>

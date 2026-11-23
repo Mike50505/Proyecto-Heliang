@@ -3,6 +3,7 @@
     <span class="cap-series-total">Total producido</span><span class="cap-series-a">Turno A</span><span class="cap-series-b">Turno B</span>
     {% if has_other %}<span class="cap-series-other">Otros / sin turno</span>{% endif %}
     <span class="cap-series-target">{{ target_label }}</span>
+    {% if daily_limit != None %}<span class="cap-series-limit">Máximo diario</span>{% endif %}
     {% if series.0.2 == None %}<small>Sin capacidad configurada</small>{% elif chart_id == 'diameter' %}<small>Meta repartida entre días laborables</small>{% elif chart_id == 'machine' %}<small>Capacidad por día laborable</small>{% endif %}
   </div>
   <div class="cap-line-chart">
@@ -10,9 +11,11 @@
     <ul id="capacity-line-{{ chart_id }}">
       {% for day,actual,target,shift_a,shift_b,other in series %}
         <li data-label="{{ day|date:'D' }}" data-date="{{ day|date:'D d/m/Y' }}" data-actual="{{ actual|floatformat:'3u' }}" data-target="{{ target|floatformat:'3u' }}"
-            data-shift-a="{{ shift_a|floatformat:'3u' }}" data-shift-b="{{ shift_b|floatformat:'3u' }}" data-other="{{ other|floatformat:'3u' }}">
+            data-shift-a="{{ shift_a|floatformat:'3u' }}" data-shift-b="{{ shift_b|floatformat:'3u' }}" data-other="{{ other|floatformat:'3u' }}"
+            {% if daily_limit != None %}data-limit="{% if forloop.counter <= capacity_workdays %}{{ daily_limit|floatformat:'3u' }}{% else %}0{% endif %}"{% endif %}>
           {{ day|date:'D d/m' }} · Producido {% if actual != None %}{{ actual|floatformat:"-3g" }} · Turno A {{ shift_a|floatformat:"-3g" }} · Turno B {{ shift_b|floatformat:"-3g" }}{% if other %} · Otros / sin turno {{ other|floatformat:"-3g" }}{% endif %}{% else %}—{% endif %}
           · {{ target_label }} {% if target != None %}{{ target|floatformat:"-3g" }}{% else %}—{% endif %}
+          {% if daily_limit != None %}· Máximo diario {% if forloop.counter <= capacity_workdays %}{{ daily_limit|floatformat:"-3g" }}{% else %}0{% endif %}{% endif %}
         </li>
       {% endfor %}
     </ul>
